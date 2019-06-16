@@ -44,31 +44,33 @@ class Symbol:
     def __str__(self):
         return self.name
 
-class ElfAnalyzer:
-    def __init__(self, path):
-        self.path = path
-        self.sections = {}
+class FkbWriter:
+    def __init__(self, elf_analyzer, shim_path):
+        self.elf = elf_analyzer
+        self.shim_path = shim_path
 
-    def analyse(self):
-        with open(self.path, "rb") as f:
+    def get_shim(self):
+        if not self.shim_path:
+            return bytearray()
+        with open(self.shim_path, "rb") as f:
             elf = ELFFile(f)
             for raw_section in elf.iter_sections():
                 section = Section(raw_section)
-                self.sections[section.name] = section
-                logging.info("Section %s" % (section))
-                if isinstance(raw_section, SymbolTableSection):
-                    for raw_symbol in raw_section.iter_symbols():
-                        symbol = Symbol(raw_symbol)
+                if section.name == ".text.shim":
+                    logging.info("Found shim - %d bytes" % (len(section.data)))
+                    return bytearray(section.data)
+            return bytearray()
 
     def write(self, path):
-        code = self.sections[".text"]
-        data = self.sections[".data"]
-        bss = self.sections[".bss"]
+        code = self.elf.sections[".text"]
+        data = self.elf.sections[".data"]
+        bss = self.elf.sections[".bss"]
 
         version = 1
         flags = 0
 
-        # Adjustable header can vary.
+        # Adjustable header can vary. Fill with gibberish for now. Eventually
+        # will contain symbol relocations, etc...
         adj_header = bytearray("IGNORED")
 
         # Pad to 4 byte alignment.
@@ -91,13 +93,32 @@ class ElfAnalyzer:
 
         assert len(header) % 4 == 0
 
+        shim = self.get_shim()
+
         with open(path, "wb") as f:
+            f.write(shim)
             f.write(header)
             f.write(bytearray(code.data))
             f.write(bytearray(data.data))
             logging.info("Wrote %d bytes of code" % (len(code.data)))
             logging.info("Wrote %d bytes of data" % (len(data.data)))
             logging.info("Wrote %d bytes of header" % (len(header)))
+
+class ElfAnalyzer:
+    def __init__(self, elf_path):
+        self.elf_path = elf_path
+        self.sections = {}
+
+    def analyse(self):
+        with open(self.elf_path, "rb") as f:
+            elf = ELFFile(f)
+            for raw_section in elf.iter_sections():
+                section = Section(raw_section)
+                self.sections[section.name] = section
+                logging.info("Section %s" % (section))
+                if isinstance(raw_section, SymbolTableSection):
+                    for raw_symbol in raw_section.iter_symbols():
+                        symbol = Symbol(raw_symbol)
 
 def configure_logging():
     logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.INFO)
@@ -108,6 +129,7 @@ def main():
     parser = argparse.ArgumentParser(description='Firmware Preparation Tool')
     parser.add_argument('--no-verbose', dest="no_verbose", action="store_true", help="Don't show verbose commands (default: false)")
     parser.add_argument('--no-debug', dest="no_debug", action="store_true", help="Don't show debug data (default: false)")
+    parser.add_argument('--shim', dest="shim_path", default=None, help="")
     parser.add_argument('--elf', dest="elf_path", default=None, help="")
     parser.add_argument('--fkb', dest="fkb_path", default=None, help="")
     args, nargs = parser.parse_known_args()
@@ -115,7 +137,8 @@ def main():
     if args.fkb_path and args.elf_path:
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
-        ea.write(args.fkb_path)
+        fw = FkbWriter(ea, args.shim_path)
+        fw.write(args.fkb_path)
 
 if __name__ == "__main__":
     main()
