@@ -35,7 +35,8 @@ typedef struct fkb_header_t {
     uint32_t bss_size;
 } fkb_header_t;
 
-uint32_t main() {
+__attribute__((section(".shim_text")))
+uint32_t shim_main() {
     fkb_header_t *fkb = NULL;
 
     volatile uint32_t i = 0;
@@ -50,6 +51,7 @@ uint32_t main() {
     return 0;
 }
 
+__attribute__((section(".shim_text")))
 void cm_dummy_handler() {
     volatile uint32_t i = 0;
     while (1) {
@@ -57,14 +59,50 @@ void cm_dummy_handler() {
     }
 }
 
-extern uint32_t __StackTop;
+__attribute__((section(".shim_text")))
+void cm_shim_nmi() {
+    volatile uint32_t i = 0;
+    while (1) {
+        i++;
+    }
+}
 
-__attribute__ ((section(".isr_vector")))
+__attribute__((section(".shim_text")))
+void cm_shim_hard_fault() {
+    volatile uint32_t i = 0;
+    while (1) {
+        i++;
+    }
+}
+
+__attribute__((section(".shim_text")))
+void cm_shim_svc() {
+    volatile uint32_t i = 0;
+    while (1) {
+        i++;
+    }
+}
+
+__attribute__((section(".shim_text")))
+void cm_shim_pendsv() {
+    volatile uint32_t i = 0;
+    while (1) {
+        i++;
+    }
+}
+
+__attribute__((section(".shim_text")))
+void cm_shim_systick() {
+}
+
+extern uint32_t __cm_shim_stack_top;
+
+__attribute__((section(".shim_isr_vector")))
 const struct cm_vector_table_t vector_table = {
-  .pvStack               = (void *)(&__StackTop),
-  .pfnReset_Handler      = (void *)main,
-  .pfnNMI_Handler        = (void *)cm_dummy_handler,
-  .pfnHardFault_Handler  = (void *)cm_dummy_handler,
+  .pvStack               = (void *)(&__cm_shim_stack_top),
+  .pfnReset_Handler      = (void *)shim_main,
+  .pfnNMI_Handler        = (void *)cm_shim_nmi,
+  .pfnHardFault_Handler  = (void *)cm_shim_hard_fault,
   .pfnReservedM12        = (void *)(0UL), /* Reserved */
   .pfnReservedM11        = (void *)(0UL), /* Reserved */
   .pfnReservedM10        = (void *)(0UL), /* Reserved */
@@ -72,9 +110,17 @@ const struct cm_vector_table_t vector_table = {
   .pfnReservedM8         = (void *)(0UL), /* Reserved */
   .pfnReservedM7         = (void *)(0UL), /* Reserved */
   .pfnReservedM6         = (void *)(0UL), /* Reserved */
-  .pfnSVC_Handler        = (void *)cm_dummy_handler,
+  .pfnSVC_Handler        = (void *)cm_shim_svc,
   .pfnReservedM4         = (void *)(0UL), /* Reserved */
   .pfnReservedM3         = (void *)(0UL), /* Reserved */
-  .pfnPendSV_Handler     = (void *)cm_dummy_handler,
-  .pfnSysTick_Handler    = (void *)cm_dummy_handler,
+  .pfnPendSV_Handler     = (void *)cm_shim_pendsv,
+  .pfnSysTick_Handler    = (void *)cm_shim_systick,
 };
+
+uint32_t main() {
+    volatile uint32_t i = 0;
+    while (1) {
+        i++;
+    }
+    return 0;
+}

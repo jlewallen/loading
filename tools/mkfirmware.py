@@ -6,15 +6,10 @@ import struct
 import argparse
 import hashlib
 import logging
+import lief
 
-from elftools.elf.elffile import ELFFile
-from elftools.elf.relocation import RelocationSection
-from elftools.elf.sections import SymbolTableSection
-from elftools.elf.relocation import RelocationSection
-from elftools.elf.descriptions import describe_reloc_type
-
-from jinja2 import FileSystemLoader
-from jinja2.environment import Environment
+# from jinja2 import FileSystemLoader
+# from jinja2.environment import Environment
 
 class Section:
     def __init__(self, section):
@@ -52,19 +47,15 @@ class FkbWriter:
     def get_shim(self):
         if not self.shim_path:
             return bytearray()
-        with open(self.shim_path, "rb") as f:
-            elf = ELFFile(f)
-            for raw_section in elf.iter_sections():
-                section = Section(raw_section)
-                if section.name == ".text.shim":
-                    logging.info("Found shim - %d bytes" % (len(section.data)))
-                    return bytearray(section.data)
-            return bytearray()
+        binary = lief.parse(self.shim_path)
+        shim_section = binary.get_section(".text")
+        logging.info("Found shim - %d bytes" % (shim_section.size))
+        return shim_section.content
 
     def write(self, path):
-        code = self.elf.sections[".text"]
-        data = self.elf.sections[".data"]
-        bss = self.elf.sections[".bss"]
+        code = self.elf.code()
+        data = self.elf.data()
+        bss = self.elf.bss()
 
         version = 1
         flags = 0
@@ -93,32 +84,85 @@ class FkbWriter:
 
         assert len(header) % 4 == 0
 
+        lief.Logger.enable()
+        # lief.Logger.set_verbose_level(9)
+
+        for a in self.elf.binary.segments:
+            print(a)
+
         shim = self.get_shim()
 
-        with open(path, "wb") as f:
-            f.write(shim)
-            f.write(header)
-            f.write(bytearray(code.data))
-            f.write(bytearray(data.data))
-            logging.info("Wrote %d bytes of code" % (len(code.data)))
-            logging.info("Wrote %d bytes of data" % (len(data.data)))
-            logging.info("Wrote %d bytes of header" % (len(header)))
+        if False:
+            shim_section = lief.ELF.Section(".text.shim", lief.ELF.SECTION_TYPES.PROGBITS)
+            shim_section += lief.ELF.SECTION_FLAGS.ALLOC
+            shim_section += lief.ELF.SECTION_FLAGS.EXECINSTR
+            shim_section.content = shim
+            shim_section.alignment = 0x8000
+            shim_section.virtual_address = 0x8000
+
+            logging.info("Adding %d (before)" % (shim_section.size))
+            shim_section = self.elf.binary.add(shim_section, loaded=True)
+
+            logging.info("Adding %d" % (shim_section.size))
+
+            header_section = lief.ELF.Section(".data.header", lief.ELF.SECTION_TYPES.PROGBITS)
+            header_section += lief.ELF.SECTION_FLAGS.ALLOC
+            header_section.content = header
+            header_section.alignment = 0x8000
+            header_section.virtual_address = 0x8000 + len(shim)
+            header_section = self.elf.binary.add(header_section, loaded=True)
+
+            logging.info("Adding %d" % (header_section.size))
+        else:
+            segment = lief.ELF.Segment()
+
+        # TODO Why are the section sizes wrong after adding?
+        offset = len(shim) + len(header)
+
+        logging.info("Adjusting .text by %d" % (offset))
+        code.virtual_address += offset
+        self.elf.binary.segments[0].virtual_address += offset
+
+        logging.info("Entry: %s" % (self.elf.binary.header.entrypoint))
+
+        logging.info("Writing %s" % (path))
+
+        for a in self.elf.binary.segments:
+            print(a)
+
+        self.elf.binary.write(path)
+
+        if False:
+            with open(path, "wb") as f:
+                f.write(shim)
+                f.write(header)
+                f.write(bytearray(code.content))
+                f.write(bytearray(data.content))
+                logging.info("Wrote %d bytes of code" % (len(code.content)))
+                logging.info("Wrote %d bytes of data" % (len(data.content)))
+                logging.info("Wrote %d bytes of header" % (len(header)))
+
+    def change_ep(self, path):
+        logging.info("Entry: %s" % (self.elf.binary.header.entrypoint))
+        # self.elf.binary.header.entrypoint = 0x
+        logging.info("Writing %s", path)
+        self.elf.binary.write(path)
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
         self.elf_path = elf_path
-        self.sections = {}
+
+    def code(self):
+        return self.binary.get_section(".text")
+
+    def data(self):
+        return self.binary.get_section(".data")
+
+    def bss(self):
+        return self.binary.get_section(".bss")
 
     def analyse(self):
-        with open(self.elf_path, "rb") as f:
-            elf = ELFFile(f)
-            for raw_section in elf.iter_sections():
-                section = Section(raw_section)
-                self.sections[section.name] = section
-                logging.info("Section %s" % (section))
-                if isinstance(raw_section, SymbolTableSection):
-                    for raw_symbol in raw_section.iter_symbols():
-                        symbol = Symbol(raw_symbol)
+        self.binary = lief.parse(self.elf_path)
 
 def configure_logging():
     logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.INFO)
@@ -138,7 +182,7 @@ def main():
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
         fw = FkbWriter(ea, args.shim_path)
-        fw.write(args.fkb_path)
+        fw.change_ep(args.fkb_path)
 
 if __name__ == "__main__":
     main()
