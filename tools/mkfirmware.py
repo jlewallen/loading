@@ -62,26 +62,31 @@ class FkbWriter:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
             self.fixup_header(fkbh_section)
             logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
+        else:
+            logging.info("No specialized handling for binary.")
         self.elf.binary.write(path)
 
 class FkbhHeader:
     def __init__(self):
-        self.min_packspec = '<4sII256sIIIII'
+        self.min_packspec = '<4sII256sIIIIII'
         self.min_size = struct.calcsize(self.min_packspec)
 
     def read(self, data):
         self.actual_size = len(data)
+        self.extra = bytearray(data[self.min_size:])
         self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
     def fix(self, ea):
-        self.fields[5] = ea.get_binary_size()
-        self.fields[6] = ea.code().size
-        self.fields[7] = ea.data().size
-        self.fields[8] = ea.bss().size
+        self.fields[5] = 0x1000
+        self.fields[6] = ea.get_binary_size()
+        self.fields[7] = ea.code().size
+        self.fields[8] = ea.data().size
+        self.fields[9] = ea.bss().size
 
     def write(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
-        return new_header + bytearray(self.actual_size - len(new_header))
+        logging.info("Actual header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
+        return new_header + self.extra
 
 class ElfAnalyzer:
     def __init__(self, elf_path):

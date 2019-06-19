@@ -25,6 +25,7 @@ typedef struct fkb_header_t {
     uint32_t header_size;
     uint8_t name[256];
     uint32_t flags;
+    uint32_t vtor_offset;
     uint32_t binary_size;
     uint32_t code_size;
     uint32_t data_size;

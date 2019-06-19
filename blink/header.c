@@ -9,6 +9,7 @@ const struct fkb_header_t fkb_header = {
     .header_size = sizeof(fkb_header_t),
     .name        = "blink-8770a491-f537-4375-a074-682571d2dd55.bin",
     .flags       = 0,
+    .vtor_offset = 0,
     .binary_size = 0,
     .code_size   = 0,
     .data_size   = 0,
