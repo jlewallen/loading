@@ -36,6 +36,17 @@ function(add_extra_targets target)
     ${CMAKE_CURRENT_BINARY_DIR}/${target}-fkb.bin)
 
   add_custom_target(${target}_fkb_bin ALL DEPENDS ${target}-fkb.bin)
+
+  set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.syms"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.s"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.S"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.sections"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.elf"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.bin"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.fkb"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}-fkb.bin"
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.map")
 endfunction()
 
 add_subdirectory(bootloader)
