@@ -6,6 +6,8 @@
 #include <loading.h>
 #include <cortex.h>
 
+extern void board_initialize(void);
+
 extern uint32_t __cm_app_vectors_ptr;
 
 uint32_t launch() {
@@ -36,6 +38,8 @@ uint32_t launch() {
 }
 
 uint32_t main() {
+    board_initialize();
+
     launch();
 
     /* If we're here then no launching occurred. */
@@ -107,3 +111,4 @@ const struct cm_vector_table_t vector_table = {
     .pendsv_handler      = (void *)cm_pendsv,
     .systick_handler     = (void *)cm_systick,
 };
+
