@@ -41,5 +41,14 @@ add_custom_command(TARGET bootloader.elf POST_BUILD
     ${CMAKE_CURRENT_BINARY_DIR}/libbootloader.a
   )
 
-add_custom_target(bootloader_bin ALL DEPENDS bootloader.elf)
+set(target_name bootloader)
 
+add_custom_target(${target_name}.bin)
+
+add_dependencies(${target_name}.bin ${target_name}.elf)
+
+add_custom_command(TARGET ${target_name}.bin POST_BUILD COMMAND ${ARDUINO_OBJCOPY} -O binary
+  ${CMAKE_CURRENT_BINARY_DIR}/${target_name}.elf
+  ${CMAKE_CURRENT_BINARY_DIR}/${target_name}.bin)
+
+add_custom_target(${target_name}_bin ALL DEPENDS ${target_name}.bin)

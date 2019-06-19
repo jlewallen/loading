@@ -43,6 +43,31 @@
 #define GENERIC_CLOCK_GENERATOR_OSC8M      (3u)
 #define GENERIC_CLOCK_MULTIPLEXER_DFLL48M  (0u)
 
+extern uint32_t __etext;
+extern uint32_t __data_start__;
+extern uint32_t __data_end__;
+extern uint32_t __bss_start__;
+extern uint32_t __bss_end__;
+
+void memory_initialize(void) {
+    uint32_t *source, *destiny;
+
+    source = &__etext;
+    destiny = &__data_start__;
+
+    if ((&__data_start__ != &__data_end__) && (source != destiny)) {
+        for ( ; destiny < &__data_end__; destiny++, source++) {
+            *destiny = *source;
+        }
+    }
+
+    if (&__bss_start__ != &__bss_end__) {
+        for (destiny = &__bss_start__; destiny < &__bss_end__; destiny++) {
+            *destiny = 0ul;
+        }
+    }
+}
+
 void board_initialize(void) {
 #if defined(__SAMD51__)
     NVMCTRL->CTRLA.reg |= NVMCTRL_CTRLA_RWS(0);

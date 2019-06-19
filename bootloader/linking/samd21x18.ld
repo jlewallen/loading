@@ -7,7 +7,7 @@
  */
 MEMORY
 {
-  FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x00040000 - 0x4000
+  FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x00004000
   RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00008000
 }
 
@@ -72,6 +72,7 @@ SECTIONS
 	} > RAM
 
   PROVIDE(__cm_app_vectors_ptr = ORIGIN(FLASH) + LENGTH(FLASH));
+
   __cm_ram_end__ = ORIGIN(RAM) + LENGTH(RAM) -1 ;
   __cm_stack_top = ORIGIN(RAM) + LENGTH(RAM);
   __cm_stack_max = __cm_stack_top - SIZEOF(.stack);

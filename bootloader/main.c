@@ -6,16 +6,19 @@
 #include <loading.h>
 #include <cortex.h>
 
+extern void memory_initialize(void);
 extern void board_initialize(void);
 
 extern uint32_t __cm_app_vectors_ptr;
+
+void delay(uint32_t ms);
 
 uint32_t launch() {
     fkb_header_t *fkb = NULL;
 
     /* Do nothing if vector pointer is erased. */
     if (__cm_app_vectors_ptr == 0xFFFFFFFF) {
-        debug_println("bl: No program: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+        debug_println("bl: no program: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
         return 0;
     }
 
@@ -23,26 +26,43 @@ uint32_t launch() {
     uint32_t *app_main_ptr = &__cm_app_vectors_ptr + 1;
 
     /* Make sure vector table address of app is aligned. */
-    if ( ((uint32_t)(&__cm_app_vectors_ptr) & ~SCB_VTOR_TBLOFF_Msk) != 0x00)
-    {
-        debug_println("bl: No vector table: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+    if ( ((uint32_t)(&__cm_app_vectors_ptr) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
+        debug_println("bl: no vector table: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
         return 0;
     }
 
-    __set_MSP( (uint32_t)(__cm_app_vectors_ptr) );
+    /* Ok, so we're doing this! */
+
+    debug_println("bl: executing program: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+
+    delay(500);
+
+    __set_MSP((uint32_t)(__cm_app_vectors_ptr));
 
     SCB->VTOR = ((uint32_t)(&__cm_app_vectors_ptr) & SCB_VTOR_TBLOFF_Msk);
 
     asm("bx %0"::"r"(*app_main_ptr));
 
+    return 0;
 }
 
 uint32_t main() {
+    memory_initialize();
+
+    SEGGER_RTT_Init();
+
+    debug_println("");
+    debug_println("bl: starting!");
+
+    SysTick_Config(F_CPU / 1000);
+
     board_initialize();
+
+    debug_println("bl: board ready");
 
     launch();
 
-    /* If we're here then no launching occurred. */
+    /* If we're here then no launching occurred! */
 
     volatile uint32_t i = 0;
     while (1) {
@@ -87,7 +107,17 @@ void cm_pendsv() {
     }
 }
 
+volatile uint32_t system_ticks = 0;
+
 void cm_systick() {
+    system_ticks++;
+}
+
+void delay(uint32_t ms) {
+    uint32_t end = system_ticks + ms;
+    while (system_ticks < ms) {
+        /* yield */
+    }
 }
 
 extern uint32_t __cm_stack_top;

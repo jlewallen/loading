@@ -3,6 +3,10 @@
 #include "segger/SEGGER_RTT.h"
 
 void setup() {
+    delay(500);
+
+    SEGGER_RTT_Init();
+
     SEGGER_RTT_WriteString(0, "\n\n");
     SEGGER_RTT_WriteString(0, "Hello!\n");
 

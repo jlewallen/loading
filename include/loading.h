@@ -35,4 +35,6 @@ typedef struct fkb_header_t {
 
 #define debug_printf(f, ...)     SEGGER_RTT_printf(0, f, ## __VA_ARGS__)
 
+#define debug_flush()
+
 #endif // LDING_LOADING_H
