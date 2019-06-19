@@ -2,7 +2,7 @@
 
 BUILD=build/m0-fk
 BOOTLOADER=${BUILD}/bootloader/bootloader.bin
-PROGRAM=${BUILD}/blink/blink-reg.bin
+PROGRAM=${BUILD}/blink/blink-hdr-fkb.bin
 
 JLinkExe -if SWD -device ATSAMD21G18 -speed 4000 <<EOF
 exitonerror 1

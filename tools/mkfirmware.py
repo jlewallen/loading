@@ -8,9 +8,6 @@ import hashlib
 import logging
 import lief
 
-# from jinja2 import FileSystemLoader
-# from jinja2.environment import Environment
-
 class Section:
     def __init__(self, section):
         self.name = section.name
@@ -52,105 +49,53 @@ class FkbWriter:
         logging.info("Found shim - %d bytes" % (shim_section.size))
         return shim_section.content
 
-    def write(self, path):
-        code = self.elf.code()
-        data = self.elf.data()
-        bss = self.elf.bss()
+    def fixup_header(self, section):
+        header = FkbhHeader()
+        header.read(section.content)
+        header.fix(self.elf)
+        section.content = header.write()
 
-        version = 1
-        flags = 0
-
-        # Adjustable header can vary. Fill with gibberish for now. Eventually
-        # will contain symbol relocations, etc...
-        adj_header = bytearray("IGNORED")
-
-        # Pad to 4 byte alignment.
-        if len(adj_header) % 4 > 0:
-            adj_header += '\0' * (4 - len(adj_header) % 4)
-
-        fixed_header_size = 7 * 4
-        header_size = fixed_header_size + len(adj_header)
-        fixed_header = bytearray("UDLM")               # Signature (4b)
-        fixed_header += struct.pack("<I", version)     # Version (4b)
-        fixed_header += struct.pack("<I", header_size) # Header Size (4b)
-        fixed_header += struct.pack("<I", flags)       # Flags Size (4b)
-        fixed_header += struct.pack("<I", code.size)   # Code Size (4b)
-        fixed_header += struct.pack("<I", data.size)   # Data Size (4b)
-        fixed_header += struct.pack("<I", bss.size)    # BSS Size (4b)
-
-        assert len(fixed_header) == fixed_header_size
-
-        header = fixed_header + adj_header
-
-        assert len(header) % 4 == 0
-
-        lief.Logger.enable()
-        # lief.Logger.set_verbose_level(9)
-
-        for a in self.elf.binary.segments:
-            print(a)
-
-        shim = self.get_shim()
-
-        if False:
-            shim_section = lief.ELF.Section(".text.shim", lief.ELF.SECTION_TYPES.PROGBITS)
-            shim_section += lief.ELF.SECTION_FLAGS.ALLOC
-            shim_section += lief.ELF.SECTION_FLAGS.EXECINSTR
-            shim_section.content = shim
-            shim_section.alignment = 0x8000
-            shim_section.virtual_address = 0x8000
-
-            logging.info("Adding %d (before)" % (shim_section.size))
-            shim_section = self.elf.binary.add(shim_section, loaded=True)
-
-            logging.info("Adding %d" % (shim_section.size))
-
-            header_section = lief.ELF.Section(".data.header", lief.ELF.SECTION_TYPES.PROGBITS)
-            header_section += lief.ELF.SECTION_FLAGS.ALLOC
-            header_section.content = header
-            header_section.alignment = 0x8000
-            header_section.virtual_address = 0x8000 + len(shim)
-            header_section = self.elf.binary.add(header_section, loaded=True)
-
-            logging.info("Adding %d" % (header_section.size))
-        else:
-            segment = lief.ELF.Segment()
-
-        # TODO Why are the section sizes wrong after adding?
-        offset = len(shim) + len(header)
-
-        logging.info("Adjusting .text by %d" % (offset))
-        code.virtual_address += offset
-        self.elf.binary.segments[0].virtual_address += offset
-
-        logging.info("Entry: %s" % (self.elf.binary.header.entrypoint))
-
-        logging.info("Writing %s" % (path))
-
-        for a in self.elf.binary.segments:
-            print(a)
-
+    def process(self, path):
+        logging.info("Processing %s...", path)
+        fkbh_section = self.elf.fkbh()
+        if fkbh_section:
+            logging.info("Found FKBH! (%s)" % (fkbh_section.size))
+            self.fixup_header(fkbh_section)
+            logging.info("Calcualted binary size: %d" % (self.elf.get_binary_size()))
         self.elf.binary.write(path)
 
-        if False:
-            with open(path, "wb") as f:
-                f.write(shim)
-                f.write(header)
-                f.write(bytearray(code.content))
-                f.write(bytearray(data.content))
-                logging.info("Wrote %d bytes of code" % (len(code.content)))
-                logging.info("Wrote %d bytes of data" % (len(data.content)))
-                logging.info("Wrote %d bytes of header" % (len(header)))
+class FkbhHeader:
+    def read(self, data):
+        self.fields = list(struct.unpack('<4sII256sIIIII', bytearray(data)))
 
-    def change_ep(self, path):
-        logging.info("Entry: %s" % (self.elf.binary.header.entrypoint))
-        # self.elf.binary.header.entrypoint = 0x
-        logging.info("Writing %s", path)
-        self.elf.binary.write(path)
+    def fix(self, ea):
+        self.fields[5] = ea.get_binary_size()
+        self.fields[6] = ea.code().size
+        self.fields[7] = ea.data().size
+        self.fields[8] = ea.bss().size
+        print ea.code().size
+        print ea.data().size
+        print ea.bss().size
+
+    def write(self):
+        return bytearray(bytes(struct.pack('<4sII256sIIIII', *self.fields)))
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
         self.elf_path = elf_path
+
+    def fkbh(self):
+        try:
+            return self.binary.get_section(".data.fkbh")
+        except:
+            return None
+
+    def get_binary_size(self):
+        size = 0
+        size += self.code().size
+        size += self.data().size
+        # size += self.bss().size
+        return size
 
     def code(self):
         return self.binary.get_section(".text")
@@ -182,7 +127,7 @@ def main():
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
         fw = FkbWriter(ea, args.shim_path)
-        fw.change_ep(args.fkb_path)
+        fw.process(args.fkb_path)
 
 if __name__ == "__main__":
     main()

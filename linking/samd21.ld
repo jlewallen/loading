@@ -9,7 +9,7 @@ ENTRY(Reset_Handler)
 
 SECTIONS
 {
-  .data.fkb : {
+  .data.fkbh : {
     KEEP(*(.fkbh))
   } > FLASH
 
@@ -128,7 +128,6 @@ SECTIONS
 
 	/* Set stack top to end of RAM, and stack limit move down by
 	 * size of stack_dummy section */
-  __ProgramBegin__ = ORIGIN(FLASH);
 	__StackTop = ORIGIN(RAM) + LENGTH(RAM);
 	__StackLimit = __StackTop - SIZEOF(.stack_dummy);
 	PROVIDE(__stack = __StackTop);

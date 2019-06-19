@@ -6,7 +6,7 @@ __attribute__((section(".fkbh")))
 const struct fkb_header_t fkb_header = {
     .signature   = "FKB",
     .version     = 1,
-    .header_size = 0,
+    .header_size = sizeof(fkb_header_t),
     .name        = "blink-8770a491-f537-4375-a074-682571d2dd55.bin",
     .flags       = 0,
     .binary_size = 0,
