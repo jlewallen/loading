@@ -19,17 +19,20 @@
 
 #include <SEGGER_RTT.h>
 
+typedef struct fkb_firmware_t {
+    uint32_t flags;
+    uint32_t timestamp;
+    uint32_t binary_size;
+    uint32_t vtor_offset;
+    uint8_t name[256];
+    uint8_t hash[128];
+} fkb_firmware_t;
+
 typedef struct fkb_header_t {
     uint8_t signature[4];
     uint32_t version;
-    uint32_t header_size;
-    uint8_t name[256];
-    uint32_t flags;
-    uint32_t vtor_offset;
-    uint32_t binary_size;
-    uint32_t code_size;
-    uint32_t data_size;
-    uint32_t bss_size;
+    uint32_t size;
+    fkb_firmware_t firmware;
 } fkb_header_t;
 
 #define fkb_header_value         "FKBH"

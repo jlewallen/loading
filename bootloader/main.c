@@ -71,11 +71,13 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
         return 0;
     }
 
-    debug_println("bl: found ('%s') flags=0x%x size=%lu vtor=%lu", fkbh->name, fkbh->flags, fkbh->binary_size, fkbh->vtor_offset);
+    debug_println("bl: found ('%s') flags=0x%x size=%lu vtor=%lu",
+                  fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
+                  fkbh->firmware.vtor_offset);
 
     /* This will need some future customization. I'm considering also placing
      * the header after the vector table, which is more efficient. */
-    fkbf->ptr = (void *)((uint8_t *)ptr) + fkbh->vtor_offset;
+    fkbf->ptr = (void *)((uint8_t *)ptr) + fkbh->firmware.vtor_offset;
 
     return try_launch((uint32_t *)fkbf->ptr);
 }

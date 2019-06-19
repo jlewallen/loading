@@ -7,34 +7,7 @@ import argparse
 import hashlib
 import logging
 import lief
-
-class Section:
-    def __init__(self, section):
-        self.name = section.name
-        self.addr = int(section['sh_addr'])
-        self.offset = int(section['sh_offset'])
-        self.size = int(section['sh_size'])
-        self.data = section.data()
-
-    def __str__(self):
-        return "Section<%s %d>" % (self.name, self.size)
-
-class Symbol:
-    def __init__(self, symbol):
-        self.name = symbol.name
-        self.type = symbol['st_info']['type']
-        self.bind = symbol['st_info']['bind']
-        self.size = symbol['st_size']
-        self.visibility = symbol['st_other']['visibility']
-        self.section = symbol['st_shndx']
-        try:
-            self.section = int(sdata["section"])
-        except:
-            pass
-        self.value = int(symbol['st_value'])
-
-    def __str__(self):
-        return self.name
+import hashlib
 
 class FkbWriter:
     def __init__(self, elf_analyzer, shim_path):
@@ -49,26 +22,36 @@ class FkbWriter:
         logging.info("Found shim - %d bytes" % (shim_section.size))
         return shim_section.content
 
-    def fixup_header(self, section):
-        header = FkbhHeader()
-        header.read(section.content)
-        header.fix(self.elf)
-        section.content = header.write()
-
     def process(self, path):
         logging.info("Processing %s...", path)
         fkbh_section = self.elf.fkbh()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
-            self.fixup_header(fkbh_section)
+            self.populate_header(fkbh_section)
             logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
         else:
             logging.info("No specialized handling for binary.")
         self.elf.binary.write(path)
 
+    def populate_header(self, section):
+        header = FkbhHeader()
+        header.read(section.content)
+        header.populate(self.elf)
+        section.content = header.write()
+
 class FkbhHeader:
+    SIGNATURE_FIELD   = 0
+    VERSION_FIELD     = 1
+    HEADER_SIZE_FIELD = 2
+    FLAGS_FIELD       = 3
+    TIMESTAMP_FIELD   = 4
+    BINARY_SIZE_FIELD = 5
+    VTOR_OFFSET_FIELD = 6
+    NAME_FIELD        = 7
+    HASH_FIELD        = 8
+
     def __init__(self):
-        self.min_packspec = '<4sII256sIIIIII'
+        self.min_packspec = '<4sIIIIII256s128s'
         self.min_size = struct.calcsize(self.min_packspec)
 
     def read(self, data):
@@ -76,16 +59,15 @@ class FkbhHeader:
         self.extra = bytearray(data[self.min_size:])
         self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
-    def fix(self, ea):
-        self.fields[5] = 0x1000
-        self.fields[6] = ea.get_binary_size()
-        self.fields[7] = ea.code().size
-        self.fields[8] = ea.data().size
-        self.fields[9] = ea.bss().size
+    def populate(self, ea):
+        self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
+        self.fields[self.HASH_FIELD] = ea.calculate_hash()
 
     def write(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
-        logging.info("Actual header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
+        logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
+        logging.info("Final Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
         return new_header + self.extra
 
 class ElfAnalyzer:
@@ -110,14 +92,17 @@ class ElfAnalyzer:
         # size += self.bss().size
         return size
 
+    def calculate_hash(self):
+        algo = hashlib.sha1()
+        algo.update(bytearray(self.code().content))
+        algo.update(bytearray(self.data().content))
+        return algo.digest()
+
     def code(self):
         return self.binary.get_section(".text")
 
     def data(self):
         return self.binary.get_section(".data")
-
-    def bss(self):
-        return self.binary.get_section(".bss")
 
     def analyse(self):
         self.binary = lief.parse(self.elf_path)
