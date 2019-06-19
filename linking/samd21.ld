@@ -9,11 +9,13 @@ ENTRY(Reset_Handler)
 
 SECTIONS
 {
+  .data.fkb : {
+    KEEP(*(.fkbh))
+  } > FLASH
+
 	.text :
 	{
 		__text_start__ = .;
-
-		KEEP(*(.fkbh))
 
 		. = ALIGN(0x2000);
 		KEEP(*(.isr_vector))

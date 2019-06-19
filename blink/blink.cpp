@@ -2,12 +2,6 @@
 #include <SEGGER_RTT.h>
 #include <loading.h>
 
-#if defined(FKB_ENABLE_HEADER__)
-extern "C" {
-
-}
-#endif
-
 void setup() {
     delay(500);
 

@@ -1,5 +1,7 @@
 #include <loading.h>
 
+#if defined(FKB_ENABLE_HEADER)
+
 __attribute__((section(".fkbh")))
 const struct fkb_header_t fkb_header = {
     .signature   = "FKB",
@@ -12,3 +14,5 @@ const struct fkb_header_t fkb_header = {
     .data_size   = 0,
     .bss_size    = 0
 };
+
+#endif
