@@ -59,26 +59,29 @@ class FkbWriter:
         logging.info("Processing %s...", path)
         fkbh_section = self.elf.fkbh()
         if fkbh_section:
-            logging.info("Found FKBH! (%s)" % (fkbh_section.size))
+            logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
             self.fixup_header(fkbh_section)
-            logging.info("Calcualted binary size: %d" % (self.elf.get_binary_size()))
+            logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
         self.elf.binary.write(path)
 
 class FkbhHeader:
+    def __init__(self):
+        self.min_packspec = '<4sII256sIIIII'
+        self.min_size = struct.calcsize(self.min_packspec)
+
     def read(self, data):
-        self.fields = list(struct.unpack('<4sII256sIIIII', bytearray(data)))
+        self.actual_size = len(data)
+        self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
     def fix(self, ea):
         self.fields[5] = ea.get_binary_size()
         self.fields[6] = ea.code().size
         self.fields[7] = ea.data().size
         self.fields[8] = ea.bss().size
-        print ea.code().size
-        print ea.data().size
-        print ea.bss().size
 
     def write(self):
-        return bytearray(bytes(struct.pack('<4sII256sIIIII', *self.fields)))
+        new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
+        return new_header + bytearray(self.actual_size - len(new_header))
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
@@ -92,8 +95,13 @@ class ElfAnalyzer:
 
     def get_binary_size(self):
         size = 0
-        size += self.code().size
+        fkbh = self.fkbh()
+        if fkbh:
+            size += fkbh.size
+        size += self.code().size # This will have padding to align vector table.
         size += self.data().size
+
+        # BSS is uninitialized and unnecessary in the binary.
         # size += self.bss().size
         return size
 
