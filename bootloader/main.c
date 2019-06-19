@@ -13,37 +13,88 @@ extern uint32_t __cm_app_vectors_ptr;
 
 void delay(uint32_t ms);
 
-uint32_t launch() {
-    fkb_header_t *fkb = NULL;
+typedef struct fkb_found_t {
+    void *ptr;
+} fkb_found_t;
+
+uint32_t try_launch(uint32_t *base) {
+    /* Make sure vector table address of app is aligned. */
+    if (((uint32_t)(base) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
+        debug_println("bl: no vector table: 0x%x (0x%x) (mask = 0x%x)", *base, base, SCB_VTOR_TBLOFF_Msk);
+        return 0;
+    }
+
+    /* Do nothing if SP is invalid. */
+    if (*base <= 0x20000000) {
+        debug_println("bl: no good stack: 0x%x (0x%x)", *base, base);
+        return 0;
+    }
 
     /* Do nothing if vector pointer is erased. */
-    if (__cm_app_vectors_ptr == 0xFFFFFFFF) {
-        debug_println("bl: no program: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+    if (*base == 0xFFFFFFFF) {
+        debug_println("bl: no program: 0x%x (0x%x)", *base, base);
         return 0;
     }
 
-    /* Check reset handler address, skip over initial SP. */
-    uint32_t *app_main_ptr = &__cm_app_vectors_ptr + 1;
-
-    /* Make sure vector table address of app is aligned. */
-    if ( ((uint32_t)(&__cm_app_vectors_ptr) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
-        debug_println("bl: no vector table: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
-        return 0;
-    }
+    /* Get entry address, skip over initial SP. */
+    uint32_t *entry_function = (uint32_t *)base + 1;
 
     /* Ok, so we're doing this! */
 
-    debug_println("bl: executing program: 0x%x (0x%x)", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+    debug_println("bl: executing program: 0x%x (0x%x)", *base, base);
 
     delay(500);
 
-    __set_MSP((uint32_t)(__cm_app_vectors_ptr));
+    if (0) {
+        __set_MSP((uint32_t)(*base));
 
-    SCB->VTOR = ((uint32_t)(&__cm_app_vectors_ptr) & SCB_VTOR_TBLOFF_Msk);
+        SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-    asm("bx %0"::"r"(*app_main_ptr));
+        asm("bx %0"::"r"(*entry_function));
+    }
 
     return 0;
+}
+
+static uint32_t aligned_on(uint32_t value, uint32_t on) {
+    return ((value % on != 0) ? (value + (on - (value % on))) : value);
+}
+
+uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
+    fkb_header_t *fkbh = (fkb_header_t *)ptr;
+
+    fkbf->ptr = NULL;
+
+    debug_println("bl: checking for fkb @ 0x%p", ptr);
+
+    if (strcmp(fkbh->signature, "FKB") != 0) {
+        return 0;
+    }
+
+    debug_println("bl: found ('%s') flags=0x%x size=%lu", fkbh->name, fkbh->flags, fkbh->binary_size);
+
+    /* This will need some future customization. I'm considering also placing
+     * the header after the vector table, which is more efficient. */
+    fkbf->ptr = (void *)aligned_on((uint32_t)ptr, 0x6000); // sizeof(fkb_header_t);
+    // fkbf->ptr = (void *)((uint8_t *)ptr + 0x6000); // sizeof(fkb_header_t);
+
+    return try_launch((uint32_t *)fkbf->ptr);
+}
+
+uint32_t launch() {
+    fkb_header_t *fkb = NULL;
+
+    debug_println("bl: looking for executable (fixed = 0x%x (0x%x))", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+
+    /* Look for FKB headers... */
+    fkb_found_t fkbf;
+
+    if (fkb_check_find((void *)&__cm_app_vectors_ptr, &fkbf)) {
+        return 0;
+    }
+
+    /* Fall back on a regular old firmware launch */
+    return try_launch(&__cm_app_vectors_ptr);
 }
 
 uint32_t main() {
@@ -63,6 +114,8 @@ uint32_t main() {
     launch();
 
     /* If we're here then no launching occurred! */
+
+    debug_println("bl: delay before trying again.");
 
     volatile uint32_t i = 0;
     while (1) {
@@ -141,4 +194,3 @@ const struct cm_vector_table_t vector_table = {
     .pendsv_handler      = (void *)cm_pendsv,
     .systick_handler     = (void *)cm_systick,
 };
-

@@ -13,6 +13,8 @@ SECTIONS
 	{
 		__text_start__ = .;
 
+		KEEP(*(.fkbh))
+
 		. = ALIGN(0x2000);
 		KEEP(*(.isr_vector))
 		*(.text*)

@@ -23,11 +23,15 @@ typedef struct fkb_header_t {
     uint8_t signature[4];
     uint32_t version;
     uint32_t header_size;
+    uint8_t name[256];
     uint32_t flags;
+    uint32_t binary_size;
     uint32_t code_size;
     uint32_t data_size;
     uint32_t bss_size;
 } fkb_header_t;
+
+#define fkb_header_value         "FKBH"
 
 #define debug_prints(f)          SEGGER_RTT_WriteString(0, f)
 
