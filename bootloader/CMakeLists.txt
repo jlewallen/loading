@@ -19,7 +19,7 @@ if(TARGET_M4)
   set(target_fcpu "120000000L")
   set(target_board_flags -DF_CPU=${target_fcpu} -D__SAMD51__ -D__SAMD51P20A__ -D__FPU_PRESENT -DARM_MATH_CM4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
   set(target_c_flags -g -Os -s -fdata-sections -nostdlib --param max-inline-insns-single=500 -MMD -mcpu=${target_mcu} -mthumb ${target_board_flags} -fstack-usage -nostdlib)
-  set(linker_script ${CMAKE_CURRENT_SOURCE_DIR}/linking/samd51x19.ld)
+  set(linker_script ${CMAKE_CURRENT_SOURCE_DIR}/linking/samd51x20.ld)
   set(target_board_libraries -larm_cortexM4lf_math -mfloat-abi=hard -mfpu=fpv4-sp-d16)
 endif()
 

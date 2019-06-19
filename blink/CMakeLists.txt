@@ -2,12 +2,12 @@ enable_arduino_toolchain()
 
 if(TARGET_M4)
   enable_m4_board(${TARGET_BOARD})
-  set(linker_script ${CMAKE_SOURCE_DIR}/linking/samd51.ld)
+  set(linker_script ${CMAKE_SOURCE_DIR}/linking/samd51x20.ld)
 endif()
 
 if(TARGET_M0)
   enable_m0()
-  set(linker_script ${CMAKE_SOURCE_DIR}/linking/samd21.ld)
+  set(linker_script ${CMAKE_SOURCE_DIR}/linking/samd21x18.ld)
 endif()
 
 file(GLOB blink_sources blink.cpp header.c ../segger/*.c ../segger/*.h)
