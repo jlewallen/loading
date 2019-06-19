@@ -29,7 +29,7 @@ function(add_extra_targets target)
 
   add_custom_target(${target}-fkb.bin)
 
-  add_dependencies(${target}-fkb.bin ${target}.elf)
+  add_dependencies(${target}-fkb.bin ${target}.fkb)
 
   add_custom_command(TARGET ${target}-fkb.bin POST_BUILD COMMAND ${ARDUINO_OBJCOPY} -O binary
     ${CMAKE_CURRENT_BINARY_DIR}/${target}.fkb
