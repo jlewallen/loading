@@ -60,14 +60,17 @@ class FkbhHeader:
         self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
     def populate(self, ea):
-        self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
+        self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
+        self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
         self.fields[self.HASH_FIELD] = ea.calculate_hash()
 
     def write(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
-        logging.info("Final Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
+        logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
+        logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
+        logging.info("Fields: %s" % (self.fields))
         return new_header + self.extra
 
 class ElfAnalyzer:
@@ -79,6 +82,9 @@ class ElfAnalyzer:
             return self.binary.get_section(".data.fkbh")
         except:
             return None
+
+    def timestamp(self):
+        return int(os.path.getmtime(self.elf_path))
 
     def get_binary_size(self):
         size = 0
