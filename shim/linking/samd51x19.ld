@@ -17,19 +17,20 @@ ENTRY(main)
 
 SECTIONS
 {
-  .shim_vectors :
+  .shim_vectors ALIGN(0x2000) :
   {
     KEEP(*(.shim_isr_vector))
   } > FLASH
 
-  .text.shim :
+  .text.shim ALIGN(0x4) :
   {
     KEEP(*(.shim_text))
   } > FLASH
 
-  .text : ALIGN(0x4)
+  .text ALIGN(0x4) :
   {
     KEEP(*(.text))
+    *(.rodata*)
   } > FLASH
 
   .ARM.extab :

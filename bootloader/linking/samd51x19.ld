@@ -15,15 +15,25 @@ ENTRY(main)
 
 SECTIONS
 {
-  .vectors :
+  .vectors ALIGN(0x2000) :
   {
     KEEP(*(.isr_vector))
   } > FLASH
 
-  .text : ALIGN(0x4)
+  .text ALIGN(0x4) :
   {
-    *(.text)
+    *(.text*)
 		*(.rodata*)
+
+    /* These are usually zero in this situation, eliminates warnings, though. */
+    *(.glue_7)
+    *(.glue_7t)
+    *(.vfp11_veneer)
+    *(.v4_bx)
+    *(.dyn)
+    *(.iplt)
+    *(.rel.dyn)
+    *(.rel.iplt)
   } > FLASH
 
   .ARM.extab :
@@ -72,6 +82,7 @@ SECTIONS
 	} > RAM
 
   PROVIDE(__cm_app_vectors_ptr = ORIGIN(FLASH) + LENGTH(FLASH));
+
   __cm_ram_end__ = ORIGIN(RAM) + LENGTH(RAM) -1 ;
   __cm_stack_top = ORIGIN(RAM) + LENGTH(RAM);
   __cm_stack_max = __cm_stack_top - SIZEOF(.stack);
