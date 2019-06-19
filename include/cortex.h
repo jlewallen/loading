@@ -14,7 +14,7 @@
 #ifndef LDING_CORTEX_H
 #define LDING_CORTEX_H
 
-#include <stdint.h>
+#include <sam.h>
 
 typedef struct cm_vector_table_t {
     void *stack;

@@ -1,6 +1,6 @@
 project(loading)
 cmake_minimum_required(VERSION 3.6)
-set(CMAKE_MODULE_PATH $ENV{CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH $ENV{CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 include(Arduino)
 

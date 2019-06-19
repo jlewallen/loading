@@ -8,7 +8,7 @@ if(TARGET_M0)
   enable_m0()
 endif()
 
-file(GLOB blink_sources blink.cpp ../segger/*.c)
+file(GLOB blink_sources blink.cpp ../segger/*.c ../segger/*.h)
 
 add_arduino_library(blink-reg "${blink_sources}")
 target_include_directories(blink-reg PUBLIC ../)

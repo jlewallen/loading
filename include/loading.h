@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include <SEGGER_RTT.h>
+
 typedef struct fkb_header_t {
     uint8_t signature[4];
     uint32_t version;
@@ -26,5 +28,11 @@ typedef struct fkb_header_t {
     uint32_t data_size;
     uint32_t bss_size;
 } fkb_header_t;
+
+#define debug_prints(f)          SEGGER_RTT_WriteString(0, f)
+
+#define debug_println(f, ...)    SEGGER_RTT_printf(0, f "\n", ## __VA_ARGS__)
+
+#define debug_printf(f, ...)     SEGGER_RTT_printf(0, f, ## __VA_ARGS__)
 
 #endif // LDING_LOADING_H

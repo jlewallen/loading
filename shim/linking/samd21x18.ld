@@ -32,5 +32,37 @@ SECTIONS
     KEEP(*(.text))
   } > FLASH
 
+  .ARM.extab :
+  {
+    *(.ARM.extab* .gnu.linkonce.armextab.*)
+  } > FLASH
+
+  __exidx_start = .;
+  .ARM.exidx :
+  {
+    *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+  } > FLASH
+  __exidx_end = .;
+
+  __etext = .;
+
+  .data : AT (__etext)
+  {
+    __data_start__ = .;
+    *(.data*)
+    . = ALIGN(4);
+    __data_end__ = .;
+  } > RAM
+
+  .bss :
+  {
+    . = ALIGN(4);
+    __bss_start__ = .;
+    *(.bss*)
+    *(COMMON)
+    . = ALIGN(4);
+    __bss_end__ = .;
+  } > RAM
+
   __cm_shim_stack_top = ORIGIN(RAM) + LENGTH(RAM);
 }
