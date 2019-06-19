@@ -28,5 +28,6 @@ function(add_extra_targets target)
   )
 endfunction()
 
+add_subdirectory(bootloader)
 add_subdirectory(shim)
 add_subdirectory(blink)
