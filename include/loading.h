@@ -35,7 +35,7 @@ typedef struct fkb_header_t {
     fkb_firmware_t firmware;
 } fkb_header_t;
 
-#define fkb_header_value         "FKBH"
+#define FKB_HEADER_SIGNATURE()   ("FKB")
 
 #define debug_prints(f)          SEGGER_RTT_WriteString(0, f)
 

@@ -4,7 +4,7 @@
 
 __attribute__((section(".fkbh")))
 const struct fkb_header_t fkb_header = {
-    .signature          = "FKB",
+    .signature          = FKB_HEADER_SIGNATURE(),
     .version            = 1,
     .size               = sizeof(fkb_header_t),
     .firmware           = {

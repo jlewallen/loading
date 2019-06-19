@@ -22,21 +22,21 @@ class FkbWriter:
         logging.info("Found shim - %d bytes" % (shim_section.size))
         return shim_section.content
 
-    def process(self, path):
+    def process(self, path, name):
         logging.info("Processing %s...", path)
         fkbh_section = self.elf.fkbh()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
-            self.populate_header(fkbh_section)
+            self.populate_header(fkbh_section, name)
             logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
         else:
             logging.info("No specialized handling for binary.")
         self.elf.binary.write(path)
 
-    def populate_header(self, section):
+    def populate_header(self, section, name):
         header = FkbhHeader()
         header.read(section.content)
-        header.populate(self.elf)
+        header.populate(self.elf, name)
         section.content = header.write()
 
 class FkbhHeader:
@@ -59,11 +59,13 @@ class FkbhHeader:
         self.extra = bytearray(data[self.min_size:])
         self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
-    def populate(self, ea):
+    def populate(self, ea, name):
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
         self.fields[self.HASH_FIELD] = ea.calculate_hash()
+        if name:
+            self.fields[self.NAME_FIELD] = name
 
     def write(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
@@ -125,13 +127,14 @@ def main():
     parser.add_argument('--shim', dest="shim_path", default=None, help="")
     parser.add_argument('--elf', dest="elf_path", default=None, help="")
     parser.add_argument('--fkb', dest="fkb_path", default=None, help="")
+    parser.add_argument('--name', dest="name", default=None, help="")
     args, nargs = parser.parse_known_args()
 
     if args.fkb_path and args.elf_path:
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
         fw = FkbWriter(ea, args.shim_path)
-        fw.process(args.fkb_path)
+        fw.process(args.fkb_path, args.name)
 
 if __name__ == "__main__":
     main()
