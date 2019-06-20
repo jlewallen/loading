@@ -38,6 +38,7 @@ add_custom_command(TARGET shim.elf POST_BUILD
     -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align
     -o ${CMAKE_CURRENT_BINARY_DIR}/shim.elf
     -L${ARDUINO_CMSIS_DIRECTORY}/Lib/GCC/
+    -L${CMAKE_CURRENT_SOURCE_DIR}/linking
     ${CMAKE_CURRENT_BINARY_DIR}/libshim.a
   )
 

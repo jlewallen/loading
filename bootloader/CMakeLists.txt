@@ -3,8 +3,6 @@ include(ArduinoTools)
 file(GLOB sources ../segger/*.c ../segger/*.h board.c main.c)
 add_library(bootloader STATIC ${sources})
 
-# -ffunction-sections
-
 if(TARGET_M0)
   set(target_mcu "cortex-m0plus")
   set(target_fcpu "48000000l")
@@ -40,6 +38,7 @@ add_custom_command(TARGET bootloader.elf POST_BUILD
     -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align
     -o ${CMAKE_CURRENT_BINARY_DIR}/bootloader.elf
     -L${ARDUINO_CMSIS_DIRECTORY}/Lib/GCC/
+    -L${CMAKE_CURRENT_SOURCE_DIR}/linking
     ${CMAKE_CURRENT_BINARY_DIR}/libbootloader.a
   )
 
