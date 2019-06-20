@@ -20,38 +20,40 @@ typedef struct fkb_found_t {
 uint32_t try_launch(uint32_t *base) {
     /* Make sure vector table address of app is aligned. */
     if (((uint32_t)(base) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
-        debug_println("bl: no vector table: 0x%x (0x%x) (mask = 0x%x)", *base, base, SCB_VTOR_TBLOFF_Msk);
+        debug_println("bl: [0x%08x] no vector table", base);
         return 0;
     }
 
     /* Do nothing if SP is invalid. */
     if (*base <= 0x20000000) {
-        debug_println("bl: no good stack: 0x%x (0x%x)", *base, base);
+        debug_println("bl: [0x%08x] invalid SP value (0x%08x)", base, *base);
         return 0;
     }
 
     /* Do nothing if vector pointer is erased. */
     if (*base == 0xFFFFFFFF) {
-        debug_println("bl: no program: 0x%x (0x%x)", *base, base);
+        debug_println("bl: [0x%08x] erased cell", base);
         return 0;
     }
 
     /* Get entry address, skip over initial SP. */
     uint32_t *entry_function = (uint32_t *)base + 1;
 
-    /* Ok, so we're doing this! */
+    if (1) {
+        debug_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
+        return;
+    }
 
-    debug_println("bl: executing program: 0x%x (0x%x)", *base, base);
+    /* Ok, so we're doing this! */
+    debug_println("bl: [0x%08x] executing (entry=0x%p)", base, entry_function);
 
     delay(500);
 
-    if (0) {
-        __set_MSP((uint32_t)(*base));
+    __set_MSP((uint32_t)(*base));
 
-        SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
+    SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-        asm("bx %0"::"r"(*entry_function));
-    }
+    asm("bx %0"::"r"(*entry_function));
 
     return 0;
 }
@@ -65,13 +67,13 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
 
     fkbf->ptr = NULL;
 
-    debug_println("bl: checking for fkb @ 0x%p", ptr);
+    debug_println("bl: [0x%08p] checking for fkb", ptr);
 
     if (strcmp(fkbh->signature, "FKB") != 0) {
         return 0;
     }
 
-    debug_println("bl: found ('%s') flags=0x%x size=%lu vtor=%lu",
+    debug_println("bl: [0x%08p] found ('%s') flags=0x%x size=%lu vtor=0x%x", ptr,
                   fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
                   fkbh->firmware.vtor_offset);
 
@@ -85,7 +87,7 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
 uint32_t launch() {
     fkb_header_t *fkb = NULL;
 
-    debug_println("bl: looking for executable (fixed = 0x%x (0x%x))", __cm_app_vectors_ptr, &__cm_app_vectors_ptr);
+    debug_println("bl: [0x%08x] looking for executable", &__cm_app_vectors_ptr);
 
     /* Look for FKB headers... */
     fkb_found_t fkbf;
