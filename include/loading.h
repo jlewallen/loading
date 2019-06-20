@@ -25,6 +25,7 @@ typedef struct fkb_firmware_t {
     uint32_t binary_size;
     uint32_t vtor_offset;
     uint8_t name[256];
+    uint16_t hash_size;
     uint8_t hash[128];
 } fkb_firmware_t;
 

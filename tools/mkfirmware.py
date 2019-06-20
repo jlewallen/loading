@@ -48,10 +48,11 @@ class FkbhHeader:
     BINARY_SIZE_FIELD = 5
     VTOR_OFFSET_FIELD = 6
     NAME_FIELD        = 7
-    HASH_FIELD        = 8
+    HASH_SIZE_FIELD   = 8
+    HASH_FIELD        = 9
 
     def __init__(self):
-        self.min_packspec = '<4sIIIIII256s128s'
+        self.min_packspec = '<4sIIIIII256sH128s'
         self.min_size = struct.calcsize(self.min_packspec)
 
     def read(self, data):
@@ -63,7 +64,10 @@ class FkbhHeader:
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
-        self.fields[self.HASH_FIELD] = ea.calculate_hash()
+
+        fwhash = ea.calculate_hash()
+        self.fields[self.HASH_SIZE_FIELD] = len(fwhash)
+        self.fields[self.HASH_FIELD] = fwhash
         if name:
             self.fields[self.NAME_FIELD] = name
 

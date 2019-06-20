@@ -5,6 +5,7 @@
  */
 #include <loading.h>
 #include <cortex.h>
+#include <string.h>
 
 extern void memory_initialize(void);
 extern void board_initialize(void);
@@ -16,6 +17,23 @@ void delay(uint32_t ms);
 typedef struct fkb_found_t {
     void *ptr;
 } fkb_found_t;
+
+static uint32_t aligned_on(uint32_t value, uint32_t on) {
+    return ((value % on != 0) ? (value + (on - (value % on))) : value);
+}
+
+static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size) {
+    // ASSERT(buffer_length > (size * 2));
+
+    for (size_t i = 0; i < size; ++i) {
+        buffer[i * 2    ] = "0123456789abcdef"[ptr[i] >> 4];
+        buffer[i * 2 + 1] = "0123456789abcdef"[ptr[i] & 0x0F];
+    }
+
+    buffer[size * 2] = 0;
+
+    return 0;
+}
 
 uint32_t try_launch(uint32_t *base) {
     /* Make sure vector table address of app is aligned. */
@@ -41,7 +59,7 @@ uint32_t try_launch(uint32_t *base) {
 
     if (1) {
         debug_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
-        return;
+        return 1;
     }
 
     /* Ok, so we're doing this! */
@@ -53,13 +71,9 @@ uint32_t try_launch(uint32_t *base) {
 
     SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-    asm("bx %0"::"r"(*entry_function));
+    __asm__("bx %0"::"r"(*entry_function));
 
     return 0;
-}
-
-static uint32_t aligned_on(uint32_t value, uint32_t on) {
-    return ((value % on != 0) ? (value + (on - (value % on))) : value);
 }
 
 uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
@@ -76,6 +90,12 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
     debug_println("bl: [0x%08p] found ('%s') flags=0x%x size=%lu vtor=0x%x", ptr,
                   fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
                   fkbh->firmware.vtor_offset);
+
+    char hex_hash[(fkbh->firmware.hash_size * 2) + 1];
+    bytes_to_hex(hex_hash, sizeof(hex_hash), fkbh->firmware.hash, fkbh->firmware.hash_size);
+
+    debug_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
+                  hex_hash, fkbh->firmware.timestamp);
 
     /* This will need some future customization. I'm considering also placing
      * the header after the vector table, which is more efficient. */

@@ -13,6 +13,7 @@ const struct fkb_header_t fkb_header = {
         .binary_size    = 0,
         .vtor_offset    = 0,
         .name           = "blink-8770a491-f537-4375-a074-682571d2dd55.bin",
+        .hash_size      = 0,
         .hash           = ""
     }
 };
