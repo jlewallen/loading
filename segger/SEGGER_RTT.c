@@ -275,6 +275,9 @@ static unsigned char _ActiveTerminal;
                 } while (0)
 static void _DoInit(void) {
   SEGGER_RTT_CB* p;
+
+  memset(&_SEGGER_RTT, 0, sizeof(SEGGER_RTT_CB));
+
   //
   // Initialize control block
   //
