@@ -57,7 +57,7 @@ uint32_t try_launch(uint32_t *base) {
     /* Get entry address, skip over initial SP. */
     uint32_t *entry_function = (uint32_t *)base + 1;
 
-    if (1) {
+    if (0) {
         debug_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
         return 1;
     }
