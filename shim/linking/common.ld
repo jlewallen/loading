@@ -39,7 +39,13 @@ SECTIONS
   } > FLASH
   __exidx_end = .;
 
-  __etext = .;
+  __etext_rtt = .;
+
+  .rtt : AT(__etext_rtt)
+  {
+  } > RAM
+
+  __etext = __etext_rtt + SIZEOF(.rtt);
 
   .data : AT (__etext)
   {

@@ -63,13 +63,15 @@ SECTIONS
 	} > FLASH
 	__exidx_end = .;
 
-	__etext = .;
+  __etext_rtt = .;
 
-  .rtt : AT (__etext)
+  .rtt : AT(__etext_rtt)
   {
   } > RAM
 
-	.data :
+  __etext = __etext_rtt + SIZEOF(.rtt);
+
+  .data : AT(__etext)
 	{
 		__data_start__ = .;
 		*(vtable)
@@ -87,7 +89,6 @@ SECTIONS
 		KEEP(*(SORT(.init_array.*)))
 		KEEP(*(.init_array))
 		PROVIDE_HIDDEN (__init_array_end = .);
-
 
 		. = ALIGN(4);
 		/* finit data */
