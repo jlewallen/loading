@@ -25,5 +25,6 @@ set(ARDUINO_OBJCOPY "${ARM_TOOLS}/arm-none-eabi-objcopy")
 set(ARDUINO_NM "${ARM_TOOLS}/arm-none-eabi-nm")
 
 set(CMAKE_C_COMPILER ${ARM_TOOLS}/arm-none-eabi-gcc)
-set(CMAKE_C_COMPILER ${ARM_TOOLS}/arm-none-eabi-gcc)
+set(CMAKE_ASM_COMPILER ${ARM_TOOLS}/arm-none-eabi-gcc)
 
+enable_language(ASM)

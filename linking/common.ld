@@ -113,6 +113,11 @@ SECTIONS
     __bss_end__ = .;
   } > RAM
 
+  .got :
+  {
+    *(.got*)
+  } > RAM
+
 	.noinit :
 	{
 		. = ALIGN(4);

@@ -9,6 +9,11 @@ import logging
 import lief
 import hashlib
 
+def relocation_type_name(r):
+    if r == lief.ELF.RELOCATION_ARM.GOT_BREL: return "GOT_BREL"
+    if r == lief.ELF.RELOCATION_ARM.ABS32: return "ABS32"
+    return "<unknown>"
+
 class FkbWriter:
     def __init__(self, elf_analyzer, shim_path):
         self.elf = elf_analyzer
@@ -31,7 +36,59 @@ class FkbWriter:
             logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
         else:
             logging.info("No specialized handling for binary.")
+
+        self.relocations()
+
         self.elf.binary.write(path)
+
+    def relocations(self):
+        code_size = self.elf.code().size
+        code_data = bytearray(self.elf.code().content)
+
+        if len(self.elf.binary.relocations) > 0:
+            for r in self.elf.binary.relocations:
+                if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL and r.type != lief.ELF.RELOCATION_ARM.ABS32:
+                    continue
+                if r.symbol.binding != lief.ELF.SYMBOL_BINDINGS.GLOBAL:
+                    continue
+                offset = r.address
+                value = r.symbol.value
+                fixed = 0
+                old = 0
+
+                if r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
+                    # A is the addend for the relocation
+                    # GOT_ORG is the addressing origin of the Global Offset
+                    #  Table (the indirection table for imported data
+                    #  addresses). This value must always be word-aligned. See
+                    #  4.6.1.8, Proxy generating relocations.
+                    # GOT(S) is the address of the GOT entry for the symbol
+                    # GOT(S) + A -GOT_ORG
+                    pass
+
+                if r.type == lief.ELF.RELOCATION_ARM.ABS32:
+                    # S (when used on its own) is the address of the symbol.
+                    # A is the addend for the relocation
+                    # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
+                    # (S + A) | T
+                    fixed = r.address - r.section.virtual_address
+                    old = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
+
+                values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
+                logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
+                if False:
+                    symbol = r.symbol
+                    logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
+                                  "has_symbol", r.has_symbol, "info", r.info, "is_rel", r.is_rel, "is_rela",
+                                  r.is_rela, "purpose", r.purpose, "section", r.section, "size", r.size, "type", r.type))
+                    logging.info(('name', symbol.name, 'binding', symbol.binding,
+                                  'exported', symbol.exported, 'other', symbol.other, 'function', symbol.is_function,
+                                  'static', symbol.is_static, 'var', symbol.is_variable, 'info', symbol.information,
+                                  'shndx', symbol.shndx, 'size', symbol.size, 'type', symbol.type, 'value', symbol.value))
+        for r in self.elf.binary.dynamic_relocations:
+            logging.info("dr: %s", r)
+        for r in self.elf.binary.object_relocations:
+            logging.info("or: %s", r)
 
     def populate_header(self, section, name):
         header = FkbhHeader()

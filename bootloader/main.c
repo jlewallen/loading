@@ -12,6 +12,8 @@ extern void board_initialize(void);
 
 extern uint32_t __cm_app_vectors_ptr;
 
+extern void invoke_pic(void *entry);
+
 void delay(uint32_t ms);
 
 typedef struct fkb_found_t {
@@ -71,7 +73,7 @@ uint32_t try_launch(uint32_t *base) {
 
     SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-    __asm__("bx %0"::"r"(*entry_function));
+    invoke_pic(*entry_function);
 
     return 0;
 }

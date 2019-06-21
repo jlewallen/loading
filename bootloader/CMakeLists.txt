@@ -1,6 +1,6 @@
 include(ArduinoTools)
 
-file(GLOB sources ../segger/*.c ../segger/*.h board.c main.c)
+file(GLOB sources ../segger/*.c ../segger/*.h *.s board.c main.c)
 add_library(bootloader STATIC ${sources})
 
 if(TARGET_M0)
@@ -10,6 +10,7 @@ if(TARGET_M0)
   set(target_c_flags -g -Os -s -fdata-sections -nostdlib --param max-inline-insns-single=500 -MMD -mcpu=${target_mcu} -mthumb ${target_board_flags} -fstack-usage -nostdlib -std=c99)
   set(linker_script ${CMAKE_CURRENT_SOURCE_DIR}/linking/samd21x18.ld)
   set(target_board_libraries -lm -larm_cortexM0l_math)
+  set(CMAKE_ASM_FLAGS "-g -x assembler-with-cpp -mcpu=${target_mcu} -mthumb -D__SAMD21__")
 endif()
 
 if(TARGET_M4)
@@ -19,6 +20,7 @@ if(TARGET_M4)
   set(target_c_flags -g -Os -s -fdata-sections -nostdlib --param max-inline-insns-single=500 -MMD -mcpu=${target_mcu} -mthumb ${target_board_flags} -fstack-usage -nostdlib -std=c99)
   set(linker_script ${CMAKE_CURRENT_SOURCE_DIR}/linking/samd51x20.ld)
   set(target_board_libraries -larm_cortexM4lf_math -mfloat-abi=hard -mfpu=fpv4-sp-d16)
+  set(CMAKE_ASM_FLAGS "-g -x assembler-with-cpp -mcpu=${target_mcu} -mthumb -D__SAMD51__")
 endif()
 
 target_compile_options(bootloader PRIVATE ${target_c_flags})
