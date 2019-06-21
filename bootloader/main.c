@@ -73,7 +73,7 @@ uint32_t try_launch(uint32_t *base) {
 
     SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-    invoke_pic(*entry_function);
+    invoke_pic((void *)*entry_function);
 
     return 0;
 }

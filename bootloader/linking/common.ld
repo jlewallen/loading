@@ -30,13 +30,13 @@ SECTIONS
     *(.rel.iplt)
   } > FLASH
 
-  .ARM.extab :
+  .ARM.extab ALIGN(0x4) :
   {
     *(.ARM.extab* .gnu.linkonce.armextab.*)
   } > FLASH
 
   __exidx_start = .;
-  .ARM.exidx :
+  .ARM.exidx ALIGN(0x4) :
   {
     *(.ARM.exidx* .gnu.linkonce.armexidx.*)
   } > FLASH
