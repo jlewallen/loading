@@ -193,7 +193,7 @@ void cm_systick() {
 
 void delay(uint32_t ms) {
     uint32_t end = system_ticks + ms;
-    while (system_ticks < ms) {
+    while (system_ticks < end) {
         /* yield */
     }
 }

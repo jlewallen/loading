@@ -8,6 +8,7 @@ import hashlib
 import logging
 import lief
 import hashlib
+import platform
 
 def relocation_type_name(r):
     if r == lief.ELF.RELOCATION_ARM.GOT_BREL: return "GOT_BREL"
@@ -15,8 +16,9 @@ def relocation_type_name(r):
     return "<unknown>"
 
 class FkbWriter:
-    def __init__(self, elf_analyzer, shim_path):
+    def __init__(self, elf_analyzer, fkb_path, shim_path):
         self.elf = elf_analyzer
+        self.fkb_path = fkb_path
         self.shim_path = shim_path
 
     def get_shim(self):
@@ -27,8 +29,8 @@ class FkbWriter:
         logging.info("Found shim - %d bytes" % (shim_section.size))
         return shim_section.content
 
-    def process(self, path, name):
-        logging.info("Processing %s...", path)
+    def process(self, name):
+        logging.info("Processing %s...", self.fkb_path)
         fkbh_section = self.elf.fkbh()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
@@ -37,15 +39,15 @@ class FkbWriter:
         else:
             logging.info("No specialized handling for binary.")
 
-        self.elf.binary.write(path)
+        self.elf.binary.write(self.fkb_path)
 
     def populate_header(self, section, name):
-        header = FkbhHeader()
+        header = FkbHeader(self.fkb_path)
         header.read(section.content)
         header.populate(self.elf, name)
         section.content = header.write()
 
-class FkbhHeader:
+class FkbHeader:
     SIGNATURE_FIELD   = 0
     VERSION_FIELD     = 1
     HEADER_SIZE_FIELD = 2
@@ -57,9 +59,10 @@ class FkbhHeader:
     HASH_SIZE_FIELD   = 8
     HASH_FIELD        = 9
 
-    def __init__(self):
+    def __init__(self, fkb_path):
         self.min_packspec = '<4sIIIIII256sH128s'
         self.min_size = struct.calcsize(self.min_packspec)
+        self.fkb_path = fkb_path
 
     def read(self, data):
         self.actual_size = len(data)
@@ -76,9 +79,16 @@ class FkbhHeader:
         self.fields[self.HASH_FIELD] = fwhash
         if name:
             self.fields[self.NAME_FIELD] = name
+        if len(self.fields[self.NAME_FIELD]) == 0 or self.fields[self.NAME_FIELD][0] == '\0':
+            self.fields[self.NAME_FIELD] = self.generate_name()
+
+    def generate_name(self):
+        name = os.path.basename(self.fkb_path)
+        return name + "_" + platform.node()
 
     def write(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
+        logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
         logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
@@ -193,8 +203,8 @@ def main():
     if args.fkb_path and args.elf_path:
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
-        fw = FkbWriter(ea, args.shim_path)
-        fw.process(args.fkb_path, args.name)
+        fw = FkbWriter(ea, args.fkb_path, args.shim_path)
+        fw.process(args.name)
     elif args.elf_path:
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
