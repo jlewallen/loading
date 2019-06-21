@@ -198,14 +198,12 @@ def main():
     parser.add_argument('--name', dest="name", default=None, help="")
     args, nargs = parser.parse_known_args()
 
-    if args.fkb_path and args.elf_path:
+    if args.elf_path:
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
-        fw = FkbWriter(ea, args.fkb_path, args.shim_path)
-        fw.process(args.name)
-    elif args.elf_path:
-        ea = ElfAnalyzer(args.elf_path)
-        ea.analyse()
+        if args.fkb_path:
+            fw = FkbWriter(ea, args.fkb_path, args.shim_path)
+            fw.process(args.name)
 
 if __name__ == "__main__":
     main()
