@@ -109,15 +109,13 @@ class ElfAnalyzer:
         return int(os.path.getmtime(self.elf_path))
 
     def get_binary_size(self):
+        # This is a good start, will probably need tweaking down the road.
         size = 0
-        fkbh = self.fkbh()
-        if fkbh:
-            size += fkbh.size
-        size += self.code().size # This will have padding to align vector table.
-        size += self.data().size
+        for section in self.binary.sections:
+            if section.type == lief.ELF.SECTION_TYPES.PROGBITS or section.type == lief.ELF.SECTION_TYPES.ARM_EXIDX:
+                if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
+                    size += section.size
 
-        # BSS is uninitialized and unnecessary in the binary.
-        # size += self.bss().size
         return size
 
     def calculate_hash(self):
