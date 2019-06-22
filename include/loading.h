@@ -24,8 +24,9 @@ typedef struct fkb_firmware_t {
     uint32_t timestamp;
     uint32_t binary_size;
     uint32_t vtor_offset;
+    uint32_t got_offset;
     uint8_t name[256];
-    uint16_t hash_size;
+    uint32_t hash_size;
     uint8_t hash[128];
 } fkb_firmware_t;
 
@@ -34,7 +35,19 @@ typedef struct fkb_header_t {
     uint32_t version;
     uint32_t size;
     fkb_firmware_t firmware;
+    uint32_t number_symbols;
+    uint32_t number_relocations;
 } fkb_header_t;
+
+typedef struct fkb_symbol_t {
+    uint8_t name[32 - 4];
+    uint32_t size;
+} fkb_symbol_t;
+
+typedef struct fkb_relocation_t {
+    uint32_t symbol;
+    uint32_t offset;
+} fkb_relocation_t;
 
 #define FKB_HEADER_SIGNATURE()   ("FKB")
 

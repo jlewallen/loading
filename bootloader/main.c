@@ -78,6 +78,28 @@ uint32_t try_launch(uint32_t *base) {
     return 0;
 }
 
+uint32_t analyse_table(fkb_header_t *header) {
+    uint8_t *base = (uint8_t *)header;
+    uint8_t *ptr = base + sizeof(fkb_header_t);
+
+    debug_println("bl: [0x%08x] number-syms=%d number-rels=%d", base, header->number_symbols, header->number_relocations);
+
+    fkb_symbol_t *syms = (fkb_symbol_t *)ptr;
+    fkb_symbol_t *s = syms;
+    for (uint32_t i = 0; i < header->number_symbols; ++i) {
+        debug_println("bl: [0x%08x] symbol='%s' size=0x%x", base, s->name, s->size);
+        s++;
+    }
+
+    fkb_relocation_t *r = (fkb_relocation_t *)s;
+    for (uint32_t i = 0; i < header->number_relocations; ++i) {
+        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x", base, syms [r->symbol].name, r->offset);
+        r++;
+    }
+
+    return 0;
+}
+
 uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
     fkb_header_t *fkbh = (fkb_header_t *)ptr;
 
@@ -98,6 +120,8 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
 
     debug_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
                   hex_hash, fkbh->firmware.timestamp);
+
+    analyse_table(fkbh);
 
     /* This will need some future customization. I'm considering also placing
      * the header after the vector table, which is more efficient. */

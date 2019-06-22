@@ -9,6 +9,8 @@ import logging
 import lief
 import hashlib
 import platform
+import threading
+import Queue as queue
 
 def relocation_type_name(r):
     if r == lief.ELF.RELOCATION_ARM.GOT_BREL: return "GOT_BREL"
@@ -45,22 +47,25 @@ class FkbWriter:
         header = FkbHeader(self.fkb_path)
         header.read(section.content)
         header.populate(self.elf, name)
-        section.content = header.write()
+        section.content = header.write(self.elf)
 
 class FkbHeader:
-    SIGNATURE_FIELD   = 0
-    VERSION_FIELD     = 1
-    HEADER_SIZE_FIELD = 2
-    FLAGS_FIELD       = 3
-    TIMESTAMP_FIELD   = 4
-    BINARY_SIZE_FIELD = 5
-    VTOR_OFFSET_FIELD = 6
-    NAME_FIELD        = 7
-    HASH_SIZE_FIELD   = 8
-    HASH_FIELD        = 9
+    SIGNATURE_FIELD          = 0
+    VERSION_FIELD            = 1
+    HEADER_SIZE_FIELD        = 2
+    FLAGS_FIELD              = 3
+    TIMESTAMP_FIELD          = 4
+    BINARY_SIZE_FIELD        = 5
+    VTOR_OFFSET_FIELD        = 6
+    GOT_OFFSET_FIELD         = 7
+    NAME_FIELD               = 8
+    HASH_SIZE_FIELD          = 9
+    HASH_FIELD               = 10
+    NUMBER_SYMBOLS_FIELD     = 11
+    NUMBER_RELOCATIONS_FIELD = 12
 
     def __init__(self, fkb_path):
-        self.min_packspec = '<4sIIIIII256sH128s'
+        self.min_packspec = '<4sIIIIIII256sI128sII'
         self.min_size = struct.calcsize(self.min_packspec)
         self.fkb_path = fkb_path
 
@@ -74,6 +79,12 @@ class FkbHeader:
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
 
+        got = ea.got()
+        if got:
+            self.fields[self.GOT_OFFSET_FIELD] = got.virtual_address - 0x20000000
+        else:
+            self.fields[self.GOT_OFFSET_FIELD] = 0x0
+
         fwhash = ea.calculate_hash()
         self.fields[self.HASH_SIZE_FIELD] = len(fwhash)
         self.fields[self.HASH_FIELD] = fwhash
@@ -82,18 +93,44 @@ class FkbHeader:
         if len(self.fields[self.NAME_FIELD]) == 0 or self.fields[self.NAME_FIELD][0] == '\0':
             self.fields[self.NAME_FIELD] = self.generate_name()
 
+        self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
+        self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
+
     def generate_name(self):
         name = os.path.basename(self.fkb_path)
         return name + "_" + platform.node()
 
-    def write(self):
+    def write(self, ea):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
+
+        symbols = bytearray()
+        relocations = bytearray()
+
+        indices = {}
+        index = 0
+        for name in ea.symbols:
+            s = ea.symbols[name]
+            symbols += struct.pack('<28sI', name, s[1])
+            indices[name] = index
+            index += 1
+
+        for r in ea.relocations:
+            relocations += struct.pack('<II', indices[r[0]], r[1])
+
+        table_size = len(symbols) + len(relocations)
+
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
+        logging.info("GOT: %d" % (self.fields[self.GOT_OFFSET_FIELD]))
         logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
         logging.info("Fields: %s" % (self.fields))
-        return new_header + self.extra
+        logging.info("Dynamic: syms=%d rels=%d" % (self.fields[self.NUMBER_SYMBOLS_FIELD], self.fields[self.NUMBER_RELOCATIONS_FIELD]))
+        logging.info("Dynamic: size=%d" % (table_size))
+
+        # TODO Ensure we have extra space!
+
+        return new_header + symbols + relocations + self.extra[table_size:]
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
@@ -102,6 +139,12 @@ class ElfAnalyzer:
     def fkbh(self):
         try:
             return self.binary.get_section(".data.fkbh")
+        except:
+            return None
+
+    def got(self):
+        try:
+            return self.binary.get_section(".got")
         except:
             return None
 
@@ -133,6 +176,8 @@ class ElfAnalyzer:
     def relocations(self):
         code_size = self.code().size
         code_data = bytearray(self.code().content)
+        self.symbols = {}
+        self.relocations = []
 
         if len(self.binary.relocations) > 0:
             for r in self.binary.relocations:
@@ -153,7 +198,10 @@ class ElfAnalyzer:
                     #  4.6.1.8, Proxy generating relocations.
                     # GOT(S) is the address of the GOT entry for the symbol
                     # GOT(S) + A -GOT_ORG
-                    pass
+                    fixed = r.address - r.section.virtual_address
+                    old = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
+
+                    self.add_relocation(r.symbol, fixed)
 
                 if r.type == lief.ELF.RELOCATION_ARM.ABS32:
                     # S (when used on its own) is the address of the symbol.
@@ -164,7 +212,8 @@ class ElfAnalyzer:
                     old = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
 
                 values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
-                logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
+                if False:
+                    logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
                 if False:
                     symbol = r.symbol
                     logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
@@ -178,6 +227,16 @@ class ElfAnalyzer:
             logging.info("dr: %s", r)
         for r in self.binary.object_relocations:
             logging.info("or: %s", r)
+
+    def add_relocation(self, symbol, offset):
+        name = str(symbol.name)
+        if not self.symbols.has_key(name):
+            self.symbols[name] = ( name, symbol.size, [] )
+
+        s = self.symbols[name]
+        s[2].append(offset)
+
+        self.relocations.append([name, offset])
 
     def analyse(self):
         self.binary = lief.parse(self.elf_path)
