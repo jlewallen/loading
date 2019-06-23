@@ -85,7 +85,8 @@ SECTIONS
 
   PROVIDE(__cm_app_vectors_ptr = ORIGIN(FLASH) + LENGTH(FLASH));
 
-  __cm_ram_end__ = ORIGIN(RAM) + LENGTH(RAM) -1 ;
+  __cm_ram_origin = ORIGIN(RAM);
+  __cm_ram_end = ORIGIN(RAM) + LENGTH(RAM) - 1;
   __cm_stack_top = ORIGIN(RAM) + LENGTH(RAM);
   __cm_stack_max = __cm_stack_top - SIZEOF(.stack);
 

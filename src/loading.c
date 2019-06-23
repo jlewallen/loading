@@ -10,6 +10,7 @@ extern void invoke_pic(void *entry, uint32_t got);
 
 extern void delay(uint32_t ms);
 
+extern uint32_t __cm_ram_origin;
 extern uint32_t __heap_top;
 extern uint32_t __data_start__;
 
@@ -28,7 +29,7 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     }
 
     /* Do nothing if SP is invalid. */
-    if (*base <= 0x20000000) {
+    if (*base <= (uint32_t)&__cm_ram_origin) {
         debug_println("bl: [0x%08x] invalid SP value (0x%08x)", base, *base);
         return 0;
     }
@@ -98,7 +99,7 @@ uint32_t analyse_table(fkb_header_t *header) {
 
     fkb_relocation_t *r = get_first_relocation(header);
     for (uint32_t i = 0; i < header->number_relocations; ++i) {
-        uint32_t *rel = (uint32_t *)(((uint8_t *)0x20000000) + r->offset + header->firmware.got_offset);
+        uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
         fkb_symbol_t *sym = &syms[r->symbol];
         void *sym_storage = get_symbol_address(header, sym);
 
@@ -150,7 +151,7 @@ uint32_t fkb_find_and_launch(void *ptr) {
      * the header after the vector table, which is more efficient. */
     uint32_t *vtor = (uint32_t *)((uint8_t *)selected + selected->firmware.vtor_offset);
 
-    return fkb_try_launch(vtor, 0x20000000 + selected->firmware.got_offset);
+    return fkb_try_launch(vtor, (uint32_t)((uint8_t *)&__cm_ram_origin + selected->firmware.got_offset));
 }
 
 static uint8_t has_valid_signature(void *ptr) {
