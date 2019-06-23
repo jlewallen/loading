@@ -141,16 +141,22 @@ uint32_t analyse_table(fkb_header_t *header) {
     return 0;
 }
 
+static uint8_t has_valid_signature(void *ptr) {
+    fkb_header_t *fkbh = (fkb_header_t *)ptr;
+    return strcmp(fkbh->signature, "FKB") == 0;
+}
+
 uint32_t fkb_find_and_launch(void *ptr) {
     fkb_header_t *selected = NULL;
 
     while (1) {
-        fkb_header_t *fkbh = (fkb_header_t *)ptr;
         debug_println("bl: [0x%08p] checking for header", ptr);
 
-        if (strcmp(fkbh->signature, "FKB") != 0) {
+        if (!has_valid_signature(ptr)) {
             break;
         }
+
+        fkb_header_t *fkbh = (fkb_header_t *)ptr;
 
         selected = fkbh;
 
@@ -166,7 +172,7 @@ uint32_t fkb_find_and_launch(void *ptr) {
 
         analyse_table(fkbh);
 
-        ptr += fkbh->firmware.binary_size;
+        ptr += aligned_on(fkbh->firmware.binary_size, 0x1000);
     }
 
     if (selected == NULL) {
