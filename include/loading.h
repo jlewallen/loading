@@ -49,6 +49,10 @@ typedef struct fkb_relocation_t {
     uint32_t offset;
 } fkb_relocation_t;
 
+uint32_t fkb_find_and_launch(void *ptr);
+
+uint32_t fkb_try_launch(uint32_t *base, uint32_t got);
+
 #define FKB_HEADER_SIGNATURE()   ("FKB")
 
 #define debug_prints(f)          SEGGER_RTT_WriteString(0, f)

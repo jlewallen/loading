@@ -1,6 +1,6 @@
 include(ArduinoTools)
 
-file(GLOB sources ../segger/*.c ../segger/*.h *.s board.c main.c)
+file(GLOB sources ../segger/*.c ../segger/*.h ../src/*.s ../src/*.c board.c main.c)
 add_library(bootloader STATIC ${sources})
 
 if(TARGET_M0)
