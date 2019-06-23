@@ -58,7 +58,7 @@ SECTIONS
   __etext = __etext_global + SIZEOF(.data.rtt) + SIZEOF(.data.fkb.launch);
 
   .data : AT (__etext)
-	{
+  {
     __data_start__ = .;
     *(.data*)
     . = ALIGN(4);
@@ -75,8 +75,8 @@ SECTIONS
     __bss_end__ = .;
   } > RAM
 
-	.heap (COPY):
-	{
+  .heap (COPY):
+  {
     __end__ = .;
     PROVIDE(end = .);
     *(.heap*)

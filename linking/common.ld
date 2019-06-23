@@ -62,7 +62,7 @@ SECTIONS
 	{
 		*(.ARM.exidx* .gnu.linkonce.armexidx.*)
 	} > FLASH
-	__exidx_end = .;
+  __exidx_end = .;
 
   __etext_global = .;
 
