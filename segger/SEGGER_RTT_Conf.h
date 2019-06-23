@@ -73,7 +73,8 @@ Revision: $Rev: 13430 $
 *
 **********************************************************************
 */
-#define SEGGER_RTT_SECTION                        ".rtt"
+#define SEGGER_RTT_SECTION                        ".rtt.control"
+#define SEGGER_RTT_BUFFER_SECTION                 ".rtt.buffers"
 #define SEGGER_RTT_MAX_NUM_UP_BUFFERS             (2)     // Max. number of up-buffers (T->H) available on this target    (Default: 3)
 #define SEGGER_RTT_MAX_NUM_DOWN_BUFFERS           (2)     // Max. number of down-buffers (H->T) available on this target  (Default: 3)
 

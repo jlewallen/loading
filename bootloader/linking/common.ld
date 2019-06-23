@@ -44,11 +44,13 @@ SECTIONS
 
   __etext_rtt = .;
 
-  .rtt : AT(__etext_rtt)
+  .rtt.data : AT(__etext_rtt)
   {
+    *(SORT_BY_INIT_PRIORITY(.rtt.control))
+    *(SORT_BY_INIT_PRIORITY(.rtt.buffers))
   } > RAM
 
-  __etext = __etext_rtt + SIZEOF(.rtt);
+  __etext = __etext_rtt + SIZEOF(.rtt.data);
 
   .data : AT (__etext)
 	{
