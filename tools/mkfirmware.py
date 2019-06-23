@@ -122,7 +122,7 @@ class FkbHeader:
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
-        logging.info("GOT: %d" % (self.fields[self.GOT_OFFSET_FIELD]))
+        logging.info("GOT: 0x%x" % (self.fields[self.GOT_OFFSET_FIELD]))
         logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
         logging.info("Fields: %s" % (self.fields))
         logging.info("Dynamic: syms=%d rels=%d" % (self.fields[self.NUMBER_SYMBOLS_FIELD], self.fields[self.NUMBER_RELOCATIONS_FIELD]))
@@ -199,9 +199,9 @@ class ElfAnalyzer:
                     # GOT(S) is the address of the GOT entry for the symbol
                     # GOT(S) + A -GOT_ORG
                     fixed = r.address - r.section.virtual_address
-                    old = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
-
-                    self.add_relocation(r.symbol, fixed)
+                    got_offset = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
+                    # NOTE This should be the same for all relocations for this symbol!
+                    self.add_relocation(r.symbol, got_offset)
 
                 if r.type == lief.ELF.RELOCATION_ARM.ABS32:
                     # S (when used on its own) is the address of the symbol.
@@ -211,8 +211,8 @@ class ElfAnalyzer:
                     fixed = r.address - r.section.virtual_address
                     old = struct.unpack_from("<I", bytearray(r.section.content), fixed)[0]
 
-                values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
-                if False:
+                if False or r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
+                    values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
                     logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
                 if False:
                     symbol = r.symbol
@@ -223,8 +223,10 @@ class ElfAnalyzer:
                                   'exported', symbol.exported, 'other', symbol.other, 'function', symbol.is_function,
                                   'static', symbol.is_static, 'var', symbol.is_variable, 'info', symbol.information,
                                   'shndx', symbol.shndx, 'size', symbol.size, 'type', symbol.type, 'value', symbol.value))
+
         for r in self.binary.dynamic_relocations:
             logging.info("dr: %s", r)
+
         for r in self.binary.object_relocations:
             logging.info("or: %s", r)
 

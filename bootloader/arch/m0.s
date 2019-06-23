@@ -6,8 +6,7 @@ invoke_pic:
         .fnstart
         .cantunwind
 
-        ldr     r4, =0x20000ec4
-        mov     r9, r4
+        mov     r9, r1
         bx      r0
 
         .fnend

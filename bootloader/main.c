@@ -12,7 +12,7 @@ extern void board_initialize(void);
 
 extern uint32_t __cm_app_vectors_ptr;
 
-extern void invoke_pic(void *entry);
+extern void invoke_pic(void *entry, uint32_t got);
 
 void delay(uint32_t ms);
 
@@ -37,7 +37,7 @@ static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, s
     return 0;
 }
 
-uint32_t try_launch(uint32_t *base) {
+uint32_t try_launch(uint32_t *base, uint32_t got) {
     /* Make sure vector table address of app is aligned. */
     if (((uint32_t)(base) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
         debug_println("bl: [0x%08x] no vector table", base);
@@ -65,7 +65,7 @@ uint32_t try_launch(uint32_t *base) {
     }
 
     /* Ok, so we're doing this! */
-    debug_println("bl: [0x%08x] executing (entry=0x%p)", base, entry_function);
+    debug_println("bl: [0x%08x] executing (entry=0x%p) (got=0x%x)", base, entry_function, got);
 
     delay(500);
 
@@ -73,27 +73,74 @@ uint32_t try_launch(uint32_t *base) {
 
     SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
 
-    invoke_pic((void *)*entry_function);
+    invoke_pic((void *)*entry_function, got);
 
     return 0;
+}
+
+extern uint32_t __heap_top;
+extern uint32_t __data_start__;
+
+static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
+    uint8_t *base = (uint8_t *)header;
+    return (fkb_symbol_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * symbol);
+}
+
+static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
+    return get_symbol_by_index(header, 0);
+}
+
+static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
+    uint8_t *base = (uint8_t *)header;
+    return (fkb_relocation_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * header->number_symbols);
+}
+
+void *get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol) {
+    uint8_t *alloc = (uint8_t *)&__heap_top;
+
+    if (strcmp(symbol->name, "_SEGGER_RTT") == 0) {
+        return (void *)&_SEGGER_RTT;
+    }
+
+    fkb_symbol_t *s = get_first_symbol(header);
+    for (uint32_t i = 0; i < header->number_symbols; ++i) {
+        if (s == symbol) {
+            return alloc;
+        }
+
+        alloc += aligned_on(s->size, 4);
+        s++;
+    }
+
+    return NULL;
 }
 
 uint32_t analyse_table(fkb_header_t *header) {
     uint8_t *base = (uint8_t *)header;
     uint8_t *ptr = base + sizeof(fkb_header_t);
 
-    debug_println("bl: [0x%08x] number-syms=%d number-rels=%d", base, header->number_symbols, header->number_relocations);
+    debug_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
+                  header->number_symbols, header->number_relocations,
+                  header->firmware.got_offset, &__data_start__);
 
-    fkb_symbol_t *syms = (fkb_symbol_t *)ptr;
+    fkb_symbol_t *syms = get_first_symbol(header);
     fkb_symbol_t *s = syms;
     for (uint32_t i = 0; i < header->number_symbols; ++i) {
         debug_println("bl: [0x%08x] symbol='%s' size=0x%x", base, s->name, s->size);
         s++;
     }
 
-    fkb_relocation_t *r = (fkb_relocation_t *)s;
+    fkb_relocation_t *r = get_first_relocation(header);
     for (uint32_t i = 0; i < header->number_relocations; ++i) {
-        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x", base, syms [r->symbol].name, r->offset);
+        uint32_t *rel = (uint32_t *)(((uint8_t *)0x20000000) + r->offset + header->firmware.got_offset);
+        fkb_symbol_t *sym = &syms[r->symbol];
+        void *sym_storage = get_symbol_address(header, sym);
+
+        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x",
+                      base, sym, r->offset, rel, sym_storage);
+
+        *rel = (uint32_t)sym_storage;
+
         r++;
     }
 
@@ -105,7 +152,7 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
 
     fkbf->ptr = NULL;
 
-    debug_println("bl: [0x%08p] checking for fkb", ptr);
+    debug_println("bl: [0x%08p] checking for header", ptr);
 
     if (strcmp(fkbh->signature, "FKB") != 0) {
         return 0;
@@ -127,7 +174,7 @@ uint32_t fkb_check_find(void *ptr, fkb_found_t *fkbf) {
      * the header after the vector table, which is more efficient. */
     fkbf->ptr = (void *)((uint8_t *)ptr) + fkbh->firmware.vtor_offset;
 
-    return try_launch((uint32_t *)fkbf->ptr);
+    return try_launch((uint32_t *)fkbf->ptr, 0x20000000 + fkbh->firmware.got_offset);
 }
 
 uint32_t launch() {
@@ -143,7 +190,7 @@ uint32_t launch() {
     }
 
     /* Fall back on a regular old firmware launch */
-    return try_launch(&__cm_app_vectors_ptr);
+    return try_launch(&__cm_app_vectors_ptr, 0);
 }
 
 uint32_t main() {
