@@ -6,6 +6,11 @@
 #include <string.h>
 #include <sam.h>
 
+__attribute__((section(".fkb.launch")))
+fkb_launch_info_t fkb_launch_info = {
+    .memory_used = 0,
+};
+
 extern void invoke_pic(void *entry, uint32_t got);
 
 extern void delay(uint32_t ms);
@@ -62,29 +67,48 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     return 0;
 }
 
-void *get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol) {
-    uint8_t *alloc = (uint8_t *)&__heap_top;
+typedef struct allocation_t {
+    uint32_t allocated;
+    void *ptr;
+} allocation_t;
+
+uint8_t get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol, allocation_t *alloc) {
+    uint8_t *top = (uint8_t *)&__heap_top;
+
+    alloc->allocated = 0;
 
     if (strcmp(symbol->name, "_SEGGER_RTT") == 0) {
-        return (void *)&_SEGGER_RTT;
+        alloc->ptr = (void *)&_SEGGER_RTT;
+        return 0;
+    }
+
+    if (strcmp(symbol->name, "fkb_launch_info") == 0) {
+        alloc->ptr = (void *)&fkb_launch_info;
+        return 0;
     }
 
     fkb_symbol_t *s = get_first_symbol(header);
     for (uint32_t i = 0; i < header->number_symbols; ++i) {
+        uint32_t allocated = aligned_on(s->size, 4);
+
         if (s == symbol) {
-            return alloc;
+            alloc->ptr = (void *)top;
+            alloc->allocated = allocated;
+            return 0;
         }
 
-        alloc += aligned_on(s->size, 4);
+        top += allocated;
         s++;
     }
 
-    return NULL;
+    return 1;
 }
 
 uint32_t analyse_table(fkb_header_t *header) {
     uint8_t *base = (uint8_t *)header;
     uint8_t *ptr = base + sizeof(fkb_header_t);
+
+    fkb_launch_info.memory_used = 0;
 
     debug_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
                   header->number_symbols, header->number_relocations,
@@ -99,14 +123,17 @@ uint32_t analyse_table(fkb_header_t *header) {
 
     fkb_relocation_t *r = get_first_relocation(header);
     for (uint32_t i = 0; i < header->number_relocations; ++i) {
-        uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
         fkb_symbol_t *sym = &syms[r->symbol];
-        void *sym_storage = get_symbol_address(header, sym);
+        uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
+        allocation_t alloc;
 
-        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x",
-                      base, sym, r->offset, rel, sym_storage);
+        get_symbol_address(header, sym, &alloc);
 
-        *rel = (uint32_t)sym_storage;
+        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x alloc=0x%x",
+                      base, sym, r->offset, rel, alloc.ptr, alloc.allocated);
+
+        *rel = (uint32_t)alloc.ptr;
+        fkb_launch_info.memory_used += alloc.allocated;
 
         r++;
     }

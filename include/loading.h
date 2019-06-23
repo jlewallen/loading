@@ -16,7 +16,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-
 #include <SEGGER_RTT.h>
 
 typedef struct fkb_firmware_t {
@@ -48,6 +47,12 @@ typedef struct fkb_relocation_t {
     uint32_t symbol;
     uint32_t offset;
 } fkb_relocation_t;
+
+typedef struct fkb_launch_info_t {
+    uint32_t memory_used;
+} fkb_launch_info_t;
+
+extern fkb_launch_info_t fkb_launch_info;
 
 uint32_t fkb_find_and_launch(void *ptr);
 

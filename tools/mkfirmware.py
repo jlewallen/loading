@@ -34,7 +34,7 @@ class FkbWriter:
 
     def process(self, name):
         logging.info("Processing %s...", self.fkb_path)
-        fkbh_section = self.elf.fkbh()
+        fkbh_section = self.elf.fkbheader()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
             self.populate_header(fkbh_section, name)
@@ -139,9 +139,9 @@ class ElfAnalyzer:
     def __init__(self, elf_path):
         self.elf_path = elf_path
 
-    def fkbh(self):
+    def fkbheader(self):
         try:
-            return self.binary.get_section(".data.fkbh")
+            return self.binary.get_section(".data.fkb.header")
         except:
             return None
 

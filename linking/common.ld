@@ -9,8 +9,9 @@ ENTRY(Reset_Handler)
 
 SECTIONS
 {
-  .data.fkbh : {
-    KEEP(*(.fkbh))
+  .data.fkb.header :
+  {
+    KEEP(*(.fkb.header))
 		. = ALIGN(0x1000);
   } > FLASH
 
@@ -63,15 +64,20 @@ SECTIONS
 	} > FLASH
 	__exidx_end = .;
 
-  __etext_rtt = .;
+  __etext_global = .;
 
-  .rtt.data : AT(__etext_rtt)
+  .data.fkb.launch : AT(__etext_global)
+  {
+    KEEP(*(.fkb.launch))
+  } > RAM
+
+  .data.rtt :
   {
     *(SORT_BY_INIT_PRIORITY(.rtt.control))
     *(SORT_BY_INIT_PRIORITY(.rtt.buffers))
   } > RAM
 
-  __etext = __etext_rtt + SIZEOF(.rtt.data);
+  __etext = __etext_global + SIZEOF(.data.rtt) + SIZEOF(.data.fkb.launch);
 
   .data : AT(__etext)
 	{
