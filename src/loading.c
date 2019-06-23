@@ -13,26 +13,12 @@ extern void delay(uint32_t ms);
 extern uint32_t __heap_top;
 extern uint32_t __data_start__;
 
-typedef struct fkb_found_t {
-    void *ptr;
-} fkb_found_t;
-
-static uint32_t aligned_on(uint32_t value, uint32_t on) {
-    return ((value % on != 0) ? (value + (on - (value % on))) : value);
-}
-
-static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size) {
-    // ASSERT(buffer_length > (size * 2));
-
-    for (size_t i = 0; i < size; ++i) {
-        buffer[i * 2    ] = "0123456789abcdef"[ptr[i] >> 4];
-        buffer[i * 2 + 1] = "0123456789abcdef"[ptr[i] & 0x0F];
-    }
-
-    buffer[size * 2] = 0;
-
-    return 0;
-}
+static uint8_t has_valid_signature(void *ptr);
+static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol);
+static fkb_symbol_t *get_first_symbol(fkb_header_t *header);
+static fkb_relocation_t *get_first_relocation(fkb_header_t *header);
+static uint32_t aligned_on(uint32_t value, uint32_t on);
+static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size);
 
 uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     /* Make sure vector table address of app is aligned. */
@@ -73,20 +59,6 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     invoke_pic((void *)*entry_function, got);
 
     return 0;
-}
-
-static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
-    uint8_t *base = (uint8_t *)header;
-    return (fkb_symbol_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * symbol);
-}
-
-static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
-    return get_symbol_by_index(header, 0);
-}
-
-static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header;
-    return (fkb_relocation_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * header->number_symbols);
 }
 
 void *get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol) {
@@ -141,11 +113,6 @@ uint32_t analyse_table(fkb_header_t *header) {
     return 0;
 }
 
-static uint8_t has_valid_signature(void *ptr) {
-    fkb_header_t *fkbh = (fkb_header_t *)ptr;
-    return strcmp(fkbh->signature, "FKB") == 0;
-}
-
 uint32_t fkb_find_and_launch(void *ptr) {
     fkb_header_t *selected = NULL;
 
@@ -184,4 +151,40 @@ uint32_t fkb_find_and_launch(void *ptr) {
     uint32_t *vtor = (uint32_t *)((uint8_t *)selected + selected->firmware.vtor_offset);
 
     return fkb_try_launch(vtor, 0x20000000 + selected->firmware.got_offset);
+}
+
+static uint8_t has_valid_signature(void *ptr) {
+    fkb_header_t *fkbh = (fkb_header_t *)ptr;
+    return strcmp(fkbh->signature, "FKB") == 0;
+}
+
+static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
+    uint8_t *base = (uint8_t *)header;
+    return (fkb_symbol_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * symbol);
+}
+
+static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
+    return get_symbol_by_index(header, 0);
+}
+
+static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
+    uint8_t *base = (uint8_t *)header;
+    return (fkb_relocation_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * header->number_symbols);
+}
+
+static uint32_t aligned_on(uint32_t value, uint32_t on) {
+    return ((value % on != 0) ? (value + (on - (value % on))) : value);
+}
+
+static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size) {
+    // ASSERT(buffer_length > (size * 2));
+
+    for (size_t i = 0; i < size; ++i) {
+        buffer[i * 2    ] = "0123456789abcdef"[ptr[i] >> 4];
+        buffer[i * 2 + 1] = "0123456789abcdef"[ptr[i] & 0x0F];
+    }
+
+    buffer[size * 2] = 0;
+
+    return 0;
 }
