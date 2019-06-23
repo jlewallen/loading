@@ -3,6 +3,8 @@
 import os
 import sys
 import struct
+import time
+import datetime
 import argparse
 import hashlib
 import logging
@@ -10,7 +12,6 @@ import lief
 import hashlib
 import platform
 import threading
-import Queue as queue
 
 def relocation_type_name(r):
     if r == lief.ELF.RELOCATION_ARM.GOT_BREL: return "GOT_BREL"
@@ -37,7 +38,6 @@ class FkbWriter:
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
             self.populate_header(fkbh_section, name)
-            logging.info("Binary size: %d bytes" % (self.elf.get_binary_size()))
         else:
             logging.info("No specialized handling for binary.")
 
@@ -91,14 +91,16 @@ class FkbHeader:
         if name:
             self.fields[self.NAME_FIELD] = name
         if len(self.fields[self.NAME_FIELD]) == 0 or self.fields[self.NAME_FIELD][0] == '\0':
-            self.fields[self.NAME_FIELD] = self.generate_name()
+            self.fields[self.NAME_FIELD] = self.generate_name(ea)
 
         self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
         self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
 
-    def generate_name(self):
+    def generate_name(self, ea):
         name = os.path.basename(self.fkb_path)
-        return name + "_" + platform.node()
+        when = datetime.datetime.utcfromtimestamp(ea.timestamp())
+        ft = when.strftime("%Y%m%d_%H%M%S")
+        return name + "_" + platform.node() + "_" + ft
 
     def write(self, ea):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
@@ -122,6 +124,7 @@ class FkbHeader:
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
+        logging.info("Binary size: %d bytes" % (self.fields[self.BINARY_SIZE_FIELD]))
         logging.info("GOT: 0x%x" % (self.fields[self.GOT_OFFSET_FIELD]))
         logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
         logging.info("Fields: %s" % (self.fields))
@@ -155,7 +158,7 @@ class ElfAnalyzer:
         # This is a good start, will probably need tweaking down the road.
         size = 0
         for section in self.binary.sections:
-            if section.type == lief.ELF.SECTION_TYPES.PROGBITS or section.type == lief.ELF.SECTION_TYPES.ARM_EXIDX:
+            if True or section.type == lief.ELF.SECTION_TYPES.PROGBITS or section.type == lief.ELF.SECTION_TYPES.ARM_EXIDX:
                 if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
                     size += section.size
 
