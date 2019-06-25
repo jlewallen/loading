@@ -7,7 +7,7 @@ class FkReloadAll(gdb.Command):
 
   def invoke(self, arg, from_tty):
     gdb.execute("load build/m0-fk/bootloader/bootloader.elf")
-    gdb.execute("load build/m0-fk/blink/blink-pic.fkb")
+    gdb.execute("load build/m0-fk/blink/blink-pic-fkb.elf")
     gdb.execute("monitor reset")
 
 end
