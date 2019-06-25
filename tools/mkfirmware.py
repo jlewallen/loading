@@ -19,21 +19,11 @@ def relocation_type_name(r):
     return "<unknown>"
 
 class FkbWriter:
-    def __init__(self, elf_analyzer, fkb_path, shim_path):
+    def __init__(self, elf_analyzer, fkb_path):
         self.elf = elf_analyzer
         self.fkb_path = fkb_path
-        self.shim_path = shim_path
-
-    def get_shim(self):
-        if not self.shim_path:
-            return bytearray()
-        binary = lief.parse(self.shim_path)
-        shim_section = binary.get_section(".text")
-        logging.info("Found shim - %d bytes" % (shim_section.size))
-        return shim_section.content
 
     def process(self, name):
-        logging.info("Processing %s...", self.fkb_path)
         fkbh_section = self.elf.fkbheader()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
@@ -248,6 +238,10 @@ class ElfAnalyzer:
         self.relocations()
 
 def configure_logging():
+    if False:
+        lief.Logger.enable()
+        lief.Logger.set_level(lief.LOGGING_LEVEL.TRACE)
+        lief.Logger.set_verbose_level(10)
     logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.INFO)
 
 def main():
@@ -256,17 +250,17 @@ def main():
     parser = argparse.ArgumentParser(description='Firmware Preparation Tool')
     parser.add_argument('--no-verbose', dest="no_verbose", action="store_true", help="Don't show verbose commands (default: false)")
     parser.add_argument('--no-debug', dest="no_debug", action="store_true", help="Don't show debug data (default: false)")
-    parser.add_argument('--shim', dest="shim_path", default=None, help="")
     parser.add_argument('--elf', dest="elf_path", default=None, help="")
     parser.add_argument('--fkb', dest="fkb_path", default=None, help="")
     parser.add_argument('--name', dest="name", default=None, help="")
     args, nargs = parser.parse_known_args()
 
     if args.elf_path:
+        logging.info("Processing %s...", args.elf_path)
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
         if args.fkb_path:
-            fw = FkbWriter(ea, args.fkb_path, args.shim_path)
+            fw = FkbWriter(ea, args.fkb_path)
             fw.process(args.name)
 
 if __name__ == "__main__":
