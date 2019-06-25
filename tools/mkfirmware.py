@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -102,7 +102,7 @@ class FkbHeader:
         index = 0
         for name in ea.symbols:
             s = ea.symbols[name]
-            symbols += struct.pack('<28sI', name, s[1])
+            symbols += struct.pack('<28sI', bytes(name, 'utf-8'), s[1])
             indices[name] = index
             index += 1
 
@@ -112,7 +112,7 @@ class FkbHeader:
         table_size = len(symbols) + len(relocations)
 
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
-        logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].encode('hex')))
+        logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].hex()))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
         logging.info("Binary size: %d bytes" % (self.fields[self.BINARY_SIZE_FIELD]))
         logging.info("GOT: 0x%x" % (self.fields[self.GOT_OFFSET_FIELD]))
@@ -225,7 +225,7 @@ class ElfAnalyzer:
 
     def add_relocation(self, symbol, offset):
         name = str(symbol.name)
-        if not self.symbols.has_key(name):
+        if not name in self.symbols:
             self.symbols[name] = ( name, symbol.size, [] )
 
         s = self.symbols[name]
