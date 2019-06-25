@@ -17,6 +17,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct fkb_firmware_t {
     uint32_t flags;
     uint32_t timestamp;
@@ -62,5 +66,9 @@ uint32_t fkb_external_printf(const char *str, ...);
 uint32_t fkb_external_println(const char *str, ...);
 
 #define FKB_HEADER_SIGNATURE()   ("FKB")
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // LDING_LOADING_H
