@@ -5,6 +5,7 @@
 #include <loading.h>
 #include <string.h>
 #include <sam.h>
+#include <SEGGER_RTT.h>
 
 __attribute__((section(".fkb.launch")))
 fkb_launch_info_t fkb_launch_info = {
@@ -29,19 +30,19 @@ static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, s
 uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     /* Make sure vector table address of app is aligned. */
     if (((uint32_t)(base) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
-        debug_println("bl: [0x%08x] no vector table", base);
+        fkb_external_println("bl: [0x%08x] no vector table", base);
         return 0;
     }
 
     /* Do nothing if SP is invalid. */
     if (*base <= (uint32_t)&__cm_ram_origin) {
-        debug_println("bl: [0x%08x] invalid SP value (0x%08x)", base, *base);
+        fkb_external_println("bl: [0x%08x] invalid SP value (0x%08x)", base, *base);
         return 0;
     }
 
     /* Do nothing if vector pointer is erased. */
     if (*base == 0xFFFFFFFF) {
-        debug_println("bl: [0x%08x] erased cell", base);
+        fkb_external_println("bl: [0x%08x] erased cell", base);
         return 0;
     }
 
@@ -49,12 +50,12 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     uint32_t *entry_function = (uint32_t *)base + 1;
 
     if (0) {
-        debug_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
+        fkb_external_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
         return 1;
     }
 
     /* Ok, so we're doing this! */
-    debug_println("bl: [0x%08x] executing (entry=0x%p) (got=0x%x)", base, entry_function, got);
+    fkb_external_println("bl: [0x%08x] executing (entry=0x%p) (got=0x%x)", base, entry_function, got);
 
     delay(500);
 
@@ -110,14 +111,14 @@ uint32_t analyse_table(fkb_header_t *header) {
 
     fkb_launch_info.memory_used = 0;
 
-    debug_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
-                  header->number_symbols, header->number_relocations,
-                  header->firmware.got_offset, &__data_start__);
+    fkb_external_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
+                         header->number_symbols, header->number_relocations,
+                         header->firmware.got_offset, &__data_start__);
 
     fkb_symbol_t *syms = get_first_symbol(header);
     fkb_symbol_t *s = syms;
     for (uint32_t i = 0; i < header->number_symbols; ++i) {
-        debug_println("bl: [0x%08x] symbol='%s' size=0x%x", base, s->name, s->size);
+        fkb_external_println("bl: [0x%08x] symbol='%s' size=0x%x", base, s->name, s->size);
         s++;
     }
 
@@ -129,8 +130,8 @@ uint32_t analyse_table(fkb_header_t *header) {
 
         get_symbol_address(header, sym, &alloc);
 
-        debug_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x alloc=0x%x",
-                      base, sym, r->offset, rel, alloc.ptr, alloc.allocated);
+        fkb_external_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x alloc=0x%x",
+                             base, sym, r->offset, rel, alloc.ptr, alloc.allocated);
 
         *rel = (uint32_t)alloc.ptr;
         fkb_launch_info.memory_used += alloc.allocated;
@@ -145,7 +146,7 @@ uint32_t fkb_find_and_launch(void *ptr) {
     fkb_header_t *selected = NULL;
 
     while (1) {
-        debug_println("bl: [0x%08p] checking for header", ptr);
+        fkb_external_println("bl: [0x%08p] checking for header", ptr);
 
         if (!has_valid_signature(ptr)) {
             break;
@@ -155,15 +156,15 @@ uint32_t fkb_find_and_launch(void *ptr) {
 
         selected = fkbh;
 
-        debug_println("bl: [0x%08p] found ('%s') flags=0x%x size=%lu vtor=0x%x", ptr,
-                      fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
-                      fkbh->firmware.vtor_offset);
+        fkb_external_println("bl: [0x%08p] found ('%s') flags=0x%x size=%lu vtor=0x%x", ptr,
+                             fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
+                             fkbh->firmware.vtor_offset);
 
         char hex_hash[(fkbh->firmware.hash_size * 2) + 1];
         bytes_to_hex(hex_hash, sizeof(hex_hash), fkbh->firmware.hash, fkbh->firmware.hash_size);
 
-        debug_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
-                      hex_hash, fkbh->firmware.timestamp);
+        fkb_external_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
+                             hex_hash, fkbh->firmware.timestamp);
 
         analyse_table(fkbh);
 

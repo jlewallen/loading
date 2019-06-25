@@ -16,7 +16,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <SEGGER_RTT.h>
 
 typedef struct fkb_firmware_t {
     uint32_t flags;
@@ -58,14 +57,10 @@ uint32_t fkb_find_and_launch(void *ptr);
 
 uint32_t fkb_try_launch(uint32_t *base, uint32_t got);
 
+uint32_t fkb_external_printf(const char *str, ...);
+
+uint32_t fkb_external_println(const char *str, ...);
+
 #define FKB_HEADER_SIGNATURE()   ("FKB")
-
-#define debug_prints(f)          SEGGER_RTT_WriteString(0, f)
-
-#define debug_println(f, ...)    SEGGER_RTT_printf(0, f "\n", ## __VA_ARGS__)
-
-#define debug_printf(f, ...)     SEGGER_RTT_printf(0, f, ## __VA_ARGS__)
-
-#define debug_flush()
 
 #endif // LDING_LOADING_H

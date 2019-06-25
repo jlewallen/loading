@@ -6,6 +6,7 @@
 #include <loading.h>
 #include <cortex.h>
 #include <string.h>
+#include <SEGGER_RTT.h>
 
 extern void memory_initialize(void);
 extern void board_initialize(void);
@@ -15,7 +16,7 @@ extern uint32_t __cm_app_vectors_ptr;
 void delay(uint32_t ms);
 
 uint32_t launch() {
-    debug_println("bl: looking for executable...");
+    fkb_external_println("bl: looking for executable...");
 
     /* Look for FKB headers... */
     if (fkb_find_and_launch((void *)&__cm_app_vectors_ptr)) {
@@ -31,20 +32,20 @@ uint32_t main() {
 
     SEGGER_RTT_Init();
 
-    debug_println("");
-    debug_println("bl: starting!");
+    fkb_external_println("");
+    fkb_external_println("bl: starting!");
 
     SysTick_Config(F_CPU / 1000);
 
     board_initialize();
 
-    debug_println("bl: board ready");
+    fkb_external_println("bl: board ready");
 
     launch();
 
     /* If we're here then no launching occurred! */
 
-    debug_println("bl: delay before trying again.");
+    fkb_external_println("bl: delay before trying again.");
 
     volatile uint32_t i = 0;
     while (1) {

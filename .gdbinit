@@ -15,6 +15,7 @@ end
 python FkReloadAll()
 
 target extended-remote :2331
+add-symbol-file build/m0-fk/bootloader/bootloader.elf 0x0000
 jra
 b Dummy_Handler
 b invoke_pic
