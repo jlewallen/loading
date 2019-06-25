@@ -234,7 +234,7 @@ class ElfAnalyzer:
         self.relocations.append([name, offset])
 
     def analyse(self):
-        self.binary = lief.parse(self.elf_path)
+        self.binary = lief.ELF.parse(self.elf_path)
         self.relocations()
 
 def configure_logging():
