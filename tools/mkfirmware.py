@@ -64,6 +64,9 @@ class FkbHeader:
         self.extra = bytearray(data[self.min_size:])
         self.fields = list(struct.unpack(self.min_packspec, bytearray(data[:self.min_size])))
 
+    def has_invalid_name(self, value):
+        return len(value) == 0 or value[0] == '\0' or value[0] == 0
+
     def populate(self, ea, name):
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
@@ -80,7 +83,7 @@ class FkbHeader:
         self.fields[self.HASH_FIELD] = fwhash
         if name:
             self.fields[self.NAME_FIELD] = name
-        if len(self.fields[self.NAME_FIELD]) == 0 or self.fields[self.NAME_FIELD][0] == '\0':
+        if self.has_invalid_name(self.fields[self.NAME_FIELD]):
             self.fields[self.NAME_FIELD] = self.generate_name(ea)
 
         self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
@@ -90,7 +93,7 @@ class FkbHeader:
         name = os.path.basename(self.fkb_path)
         when = datetime.datetime.utcfromtimestamp(ea.timestamp())
         ft = when.strftime("%Y%m%d_%H%M%S")
-        return name + "_" + platform.node() + "_" + ft
+        return bytes(name + "_" + platform.node() + "_" + ft, 'utf8')
 
     def write(self, ea):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
