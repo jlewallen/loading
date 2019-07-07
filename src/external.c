@@ -21,4 +21,8 @@ uint32_t fkb_external_println(const char *str, ...) {
     return r;
 }
 
+uint32_t fkb_external_vprintf(const char *str, va_list args) {
+    return (uint32_t)SEGGER_RTT_vprintf(0, str, &args);
+}
+
 #endif

@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +65,8 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got);
 uint32_t fkb_external_printf(const char *str, ...);
 
 uint32_t fkb_external_println(const char *str, ...);
+
+uint32_t fkb_external_vprintf(const char *str, va_list args);
 
 #define FKB_HEADER_SIGNATURE()   ("FKB")
 
