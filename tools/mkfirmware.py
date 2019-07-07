@@ -114,6 +114,9 @@ class FkbHeader:
 
         table_size = len(symbols) + len(relocations)
 
+        logging.info("Code Size: %d" % (ea.code().size))
+        logging.info("Data Size: %d" % (ea.get_data_size()))
+
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].hex()))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
@@ -147,13 +150,19 @@ class ElfAnalyzer:
     def timestamp(self):
         return int(os.path.getmtime(self.elf_path))
 
-    def get_binary_size(self):
-        # This is a good start, will probably need tweaking down the road.
+    def get_data_size(self):
         size = 0
         for section in self.binary.sections:
-            if True or section.type == lief.ELF.SECTION_TYPES.PROGBITS or section.type == lief.ELF.SECTION_TYPES.ARM_EXIDX:
-                if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
-                    size += section.size
+            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
+                size += section.size
+
+        return size
+
+    def get_binary_size(self):
+        size = 0
+        for section in self.binary.sections:
+            if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
+                size += section.size
 
         return size
 
@@ -168,6 +177,9 @@ class ElfAnalyzer:
 
     def data(self):
         return self.binary.get_section(".data")
+
+    def bss(self):
+        return self.binary.get_section(".bss")
 
     def relocations(self):
         code_size = self.code().size
