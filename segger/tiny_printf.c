@@ -32,7 +32,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "printf.h"
+#include "tiny_printf.h"
 
 #ifdef __cplusplus
 extern "C" {
