@@ -1,8 +1,6 @@
-#include <loading.h>
-
-#if defined(FKB_EXTERNAL_NEED_PRINTF)
-
 #include <SEGGER_RTT.h>
+
+#include <loading.h>
 
 uint32_t fkb_external_printf(const char *str, ...) {
     va_list args;
@@ -22,7 +20,5 @@ uint32_t fkb_external_println(const char *str, ...) {
 }
 
 uint32_t fkb_external_vprintf(const char *str, va_list args) {
-    return (uint32_t)SEGGER_RTT_vprintf(0, str, &args);
+    return (uint32_t)SEGGER_RTT_vprintf(0, str, (va_list *)&args);
 }
-
-#endif
