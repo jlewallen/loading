@@ -187,7 +187,7 @@ class ElfAnalyzer:
             return self.raw_cache[section]
         byte_data = bytearray(section.content)
         self.raw_cache[section] = byte_data
-        logging.info("Processing %s", section.name)
+        logging.info("Processing %s (%d)", section.name, len(byte_data))
         return byte_data
 
     def relocations(self):
