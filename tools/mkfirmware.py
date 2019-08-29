@@ -185,16 +185,16 @@ class ElfAnalyzer:
     def raw_section_data(self, section):
         if section in self.raw_cache.keys():
             return self.raw_cache[section]
+        logging.info("Opening %s...", section.name)
         byte_data = bytearray(section.content)
         self.raw_cache[section] = byte_data
         logging.info("Processing %s (%d)", section.name, len(byte_data))
         return byte_data
 
     def relocations(self):
-        code_size = self.code().size
-        code_data = bytearray(self.code().content)
         self.symbols = {}
         self.relocations = []
+        self.verbose = False
 
         if len(self.binary.relocations) > 0:
             for r in self.binary.relocations:
@@ -226,14 +226,15 @@ class ElfAnalyzer:
                     # A is the addend for the relocation
                     # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
                     # (S + A) | T
-                    fixed = r.address - r.section.virtual_address
-                    raw = self.raw_section_data(r.section)
-                    old = struct.unpack_from("<I", raw, fixed)[0]
+                    if self.verbose:
+                        fixed = r.address - r.section.virtual_address
+                        raw = self.raw_section_data(r.section)
+                        old = struct.unpack_from("<I", raw, fixed)[0]
 
-                if False or r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
+                if self.verbose or r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
                     values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
                     logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
-                if False:
+                if self.verbose:
                     symbol = r.symbol
                     logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
                                   "has_symbol", r.has_symbol, "info", r.info, "is_rel", r.is_rel, "is_rela",
