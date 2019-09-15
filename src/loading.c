@@ -55,9 +55,9 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     }
 
     /* Ok, so we're doing this! */
-    fkb_external_println("bl: [0x%08x] executing (entry=0x%p) (got=0x%x)", base, entry_function, got);
+    fkb_external_println("bl: [0x%08x] executing (sp=0x%p) (entry=0x%p) (got=0x%x)", base, *base, entry_function, got);
 
-    delay(500);
+    delay(250);
 
     __set_MSP((uint32_t)(*base));
 

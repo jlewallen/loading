@@ -68,9 +68,34 @@ class FkbHeader:
         return len(value) == 0 or value[0] == '\0' or value[0] == 0
 
     def populate(self, ea, name):
+        self.symbols = bytearray()
+        self.relocations = bytearray()
+
+        indices = {}
+        index = 0
+        for symbol_name in ea.symbols:
+            s = ea.symbols[symbol_name]
+            if len(s) > 28:
+                raise Exception("Symbol name too long")
+            self.symbols += struct.pack('<28sI', bytes(symbol_name, 'utf-8'), s[1])
+            indices[symbol_name] = index
+            index += 1
+
+        for r in ea.relocations:
+            self.relocations += struct.pack('<II', indices[r[0]], r[1])
+
+        self.table_size = len(self.symbols) + len(self.relocations)
+
+        offset = self.aligned(self.table_size, 1024)
+        logging.info("Offset: %d", offset)
+        # self.extra = bytearray([0] * (offset - self.min_size))
+
+        if self.table_size > len(self.extra):
+            raise Exception("Table overflowed: %d > %d" % (self.table_size, len(self.extra)))
+
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
-        self.fields[self.VTOR_OFFSET_FIELD] = 0x1000
+        self.fields[self.VTOR_OFFSET_FIELD] = 0x4000
 
         got = ea.got()
         if got:
@@ -89,6 +114,11 @@ class FkbHeader:
         self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
         self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
 
+    def aligned(self, size, on):
+        if size % on != 0:
+            return (size + (on - (size % on)))
+        return size
+
     def generate_name(self, ea):
         name = os.path.basename(self.fkb_path)
         when = datetime.datetime.utcfromtimestamp(ea.timestamp())
@@ -97,22 +127,6 @@ class FkbHeader:
 
     def write(self, ea):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
-
-        symbols = bytearray()
-        relocations = bytearray()
-
-        indices = {}
-        index = 0
-        for name in ea.symbols:
-            s = ea.symbols[name]
-            symbols += struct.pack('<28sI', bytes(name, 'utf-8'), s[1])
-            indices[name] = index
-            index += 1
-
-        for r in ea.relocations:
-            relocations += struct.pack('<II', indices[r[0]], r[1])
-
-        table_size = len(symbols) + len(relocations)
 
         logging.info("Code Size: %d" % (ea.code().size))
         logging.info("Data Size: %d" % (ea.get_data_size()))
@@ -125,11 +139,9 @@ class FkbHeader:
         logging.info("Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra)))
         logging.info("Fields: %s" % (self.fields))
         logging.info("Dynamic: syms=%d rels=%d" % (self.fields[self.NUMBER_SYMBOLS_FIELD], self.fields[self.NUMBER_RELOCATIONS_FIELD]))
-        logging.info("Dynamic: size=%d" % (table_size))
+        logging.info("Dynamic: size=%d" % (self.table_size))
 
-        # TODO Ensure we have extra space!
-
-        return new_header + symbols + relocations + self.extra[table_size:]
+        return new_header + self.symbols + self.relocations + self.extra[self.table_size:]
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
@@ -232,8 +244,8 @@ class ElfAnalyzer:
                         old = struct.unpack_from("<I", raw, fixed)[0]
 
                 if self.verbose or r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
-                    values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old)
-                    logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x" % values)
+                    values = (r.symbol.name, r.symbol.size, offset, fixed, value, relocation_type_name(r.type), r.section.name, len(r.section.content), r.section.virtual_address, old, r.symbol.type)
+                    logging.info("Relocation: %s (0x%x) offset=0x%x fixed=0x%x value=0x%x (%s) section=(%s 0x%x, va=0x%x) OLD=0x%x TYPE=%s" % values)
                 if self.verbose:
                     symbol = r.symbol
                     logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
