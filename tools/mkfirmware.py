@@ -45,17 +45,19 @@ class FkbHeader:
     HEADER_SIZE_FIELD        = 2
     FLAGS_FIELD              = 3
     TIMESTAMP_FIELD          = 4
-    BINARY_SIZE_FIELD        = 5
-    VTOR_OFFSET_FIELD        = 6
-    GOT_OFFSET_FIELD         = 7
-    NAME_FIELD               = 8
-    HASH_SIZE_FIELD          = 9
-    HASH_FIELD               = 10
-    NUMBER_SYMBOLS_FIELD     = 11
-    NUMBER_RELOCATIONS_FIELD = 12
+    BUILD_NUMBER_FIELD       = 5
+    VERSION_FIELD            = 6
+    BINARY_SIZE_FIELD        = 7
+    VTOR_OFFSET_FIELD        = 8
+    GOT_OFFSET_FIELD         = 9
+    NAME_FIELD               = 10
+    HASH_SIZE_FIELD          = 11
+    HASH_FIELD               = 12
+    NUMBER_SYMBOLS_FIELD     = 13
+    NUMBER_RELOCATIONS_FIELD = 14
 
     def __init__(self, fkb_path):
-        self.min_packspec = '<4sIIIIIII256sI128sII'
+        self.min_packspec = '<4sIIIII16sIII256sI128sII'
         self.min_size = struct.calcsize(self.min_packspec)
         self.fkb_path = fkb_path
 
@@ -111,6 +113,9 @@ class FkbHeader:
         if self.has_invalid_name(self.fields[self.NAME_FIELD]):
             self.fields[self.NAME_FIELD] = self.generate_name(ea)
 
+        if 'BUILD_NUMBER' in os.environ:
+            self.fields[self.BUILD_NUMBER_FIELD] = int(os.environ['BUILD_NUMBER'])
+
         self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
         self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
 
@@ -132,6 +137,8 @@ class FkbHeader:
         logging.info("Data Size: %d" % (ea.get_data_size()))
 
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
+        logging.info("Version: %s" % (self.fields[self.VERSION_FIELD]))
+        logging.info("Number: %s" % (self.fields[self.BUILD_NUMBER_FIELD]))
         logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].hex()))
         logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
         logging.info("Binary size: %d bytes" % (self.fields[self.BINARY_SIZE_FIELD]))

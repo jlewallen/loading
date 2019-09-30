@@ -156,9 +156,9 @@ uint32_t fkb_find_and_launch(void *ptr) {
 
         selected = fkbh;
 
-        fkb_external_println("bl: [0x%08p] found ('%s') flags=0x%x size=%lu vtor=0x%x", ptr,
-                             fkbh->firmware.name, fkbh->firmware.flags, fkbh->firmware.binary_size,
-                             fkbh->firmware.vtor_offset);
+        fkb_external_println("bl: [0x%08p] found '%s' / #%lu '%s' flags=0x%x size=%lu vtor=0x%x", ptr,
+                             fkbh->firmware.name, fkbh->firmware.number, fkbh->firmware.version,
+                             fkbh->firmware.flags, fkbh->firmware.binary_size, fkbh->firmware.vtor_offset);
 
         char hex_hash[(fkbh->firmware.hash_size * 2) + 1];
         bytes_to_hex(hex_hash, sizeof(hex_hash), fkbh->firmware.hash, fkbh->firmware.hash_size);
