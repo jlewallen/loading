@@ -17,10 +17,10 @@ function(add_extra_targets target)
     DEPENDS ${target}.elf
   )
 
-  add_custom_target(${target}.sections ALL
-    arm-none-eabi-readelf --sections ${binary_dir}/${target}.elf > ${target}.sections
-    DEPENDS ${target}.elf
-  )
+  # add_custom_target(${target}.sections ALL
+  #  arm-none-eabi-readelf --sections ${binary_dir}/${target}.elf > ${target}.sections
+  #  DEPENDS ${target}.elf
+  # )
 
   add_custom_target(${target}-fkb.elf ALL
     ${CMAKE_SOURCE_DIR}/tools/mkfirmware.py --elf ${binary_dir}/${target}.elf --fkb ${binary_dir}/${target}-fkb.elf
