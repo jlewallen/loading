@@ -28,6 +28,9 @@ typedef struct fkb_firmware_t {
     uint32_t number;
     uint8_t version[16];
     uint32_t binary_size;
+    uint32_t data_size;
+    uint32_t bss_size;
+    uint32_t got_size;
     uint32_t vtor_offset;
     uint32_t got_offset;
     uint8_t name[256];
@@ -44,9 +47,15 @@ typedef struct fkb_header_t {
     uint32_t number_relocations;
 } fkb_header_t;
 
+#define FKB_SYMBOL_TYPE_OBJECT     (0)
+
+#define FKB_SYMBOL_TYPE_FUNC       (1)
+
 typedef struct fkb_symbol_t {
-    uint8_t name[32 - 4];
+    uint32_t type;
     uint32_t size;
+    uint32_t address;
+    uint8_t  name[24];
 } fkb_symbol_t;
 
 typedef struct fkb_relocation_t {
