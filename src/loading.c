@@ -55,7 +55,7 @@ uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
     }
 
     /* Ok, so we're doing this! */
-    fkb_external_println("bl: [0x%08x] executing (sp=0x%p) (entry=0x%p) (got=0x%x)", base, *base, entry_function, got);
+    fkb_external_println("bl: [0x%08x] executing (sp=0x%p) (entry=0x%p) (got=0x%x)", base, *base, *entry_function, got);
 
     __set_MSP((uint32_t)(*base));
 
@@ -128,11 +128,17 @@ uint32_t analyse_table(fkb_header_t *header) {
 
         get_symbol_address(header, sym, &alloc);
 
-        fkb_external_println("bl: [0x%08x] relocation of='%s' @ offset=0x%x rel=0x%x actual=0x%x alloc=0x%x",
-                             base, sym, r->offset, rel, alloc.ptr, alloc.allocated);
+        fkb_external_println("bl: [0x%08x] relocation offset=0x%8x rel=0x%8x allocated=0x%8x size=0x%4x addr=0x%8x of='%s'",
+                             base, r->offset, rel, alloc.ptr, sym->size, sym->address, sym->name);
 
-        *rel = (uint32_t)alloc.ptr;
-        fkb_launch_info.memory_used += alloc.allocated;
+        if (sym->size == 0) {
+            *rel = (uint32_t)sym->address;
+        }
+        else {
+            *rel = (uint32_t)alloc.ptr;
+            *rel = (uint32_t)sym->address;
+            fkb_launch_info.memory_used += alloc.allocated;
+        }
 
         r++;
     }

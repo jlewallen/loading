@@ -16,7 +16,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
-#include "sam.h"
+#include <sam.h>
 
 #define GENERIC_CLOCK_GENERATOR_MAIN       (0u)
 
@@ -33,7 +33,7 @@
 #define GENERIC_CLOCK_GENERATOR_12M_SYNC   GCLK_SYNCBUSY_GENCTRL4
 #define MAIN_CLOCK_SOURCE				           GCLK_GENCTRL_SRC_DPLL0
 #define GENERIC_CLOCK_GENERATOR_1M		     (7u)
-#define CRYSTALLESS
+// #define CRYSTALLESS
 #else
 #define GENERIC_CLOCK_GENERATOR_XOSC32K    (1u)
 #endif

@@ -2,3 +2,4 @@ build
 .gdb_history
 jlink.log
 dependencies.cmake
+__pycache__

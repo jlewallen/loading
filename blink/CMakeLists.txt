@@ -23,7 +23,7 @@ endif()
 
 add_arduino_library(blink-pic "${blink_sources}")
 target_include_directories(blink-pic PUBLIC ../ ../segger ../include)
-target_compile_options(blink-pic PUBLIC -Wall -Werror -DFKB_ENABLE_HEADER -fpic -fno-inline -msingle-pic-base -mpic-data-is-text-relative)
+target_compile_options(blink-pic PUBLIC -Wall -Werror -DFKB_ENABLE_HEADER -fpic -fno-inline -msingle-pic-base -mno-pic-data-is-text-relative)
 configure_firmware_linker_script(blink-pic ${linker_script})
 add_arduino_firmware(blink-pic)
 add_extra_targets(blink-pic)

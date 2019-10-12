@@ -8,8 +8,8 @@ class FkReloadAll(gdb.Command):
     super(FkReloadAll, self).__init__("jra", gdb.COMMAND_SUPPORT, gdb.COMPLETE_NONE, True)
 
   def invoke(self, arg, from_tty):
-    gdb.execute("load build/m4-fk/bootloader/bootloader.elf")
-    gdb.execute("load build/m4-fk/blink/blink-pic-fkb.elf")
+    gdb.execute("load build/m4-gc/bootloader/bootloader.elf")
+    gdb.execute("load build/m4-gc/blink/blink-pic-fkb.elf")
     gdb.execute("monitor reset")
 
 class FkRestart(gdb.Command):
@@ -30,8 +30,8 @@ class FkReloadAllAndRun(gdb.Command):
     made = subprocess.run(["make", "-j4"])
     if made.returncode != 0:
       return False
-    gdb.execute("load build/m4-fk/bootloader/bootloader.elf")
-    gdb.execute("load build/m4-fk/blink/blink-pic-fkb.elf")
+    gdb.execute("load build/m4-gc/bootloader/bootloader.elf")
+    gdb.execute("load build/m4-gc/blink/blink-pic-fkb.elf")
     gdb.execute("monitor reset")
     gdb.execute("c")
 
@@ -41,13 +41,15 @@ python FkReloadAll()
 python FkRestart()
 python FkReloadAllAndRun()
 
-target extended-remote :2331
-# monitor exec SetRTTSearchRanges 0x20000000 64
-add-symbol-file build/m4-fk/bootloader/bootloader.elf 0x0000
-add-symbol-file build/m4-fk/blink/blink-pic-fkb.elf 0x4000
+target extended-remote :4331
+monitor exec SetRTTSearchRanges 0x20000000 64
+add-symbol-file build/m4-gc/bootloader/bootloader.elf 0x0000
+add-symbol-file build/m4-gc/blink/blink-pic-fkb.elf 0x4000
 jra
 b Dummy_Handler
-# b invoke_pic
+b Reset_Handler
+b invoke_pic
 b test_object
+b setup
 monitor reset
 continue
