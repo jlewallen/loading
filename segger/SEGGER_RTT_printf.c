@@ -74,12 +74,6 @@ Revision: $Rev: 12360 $
 #include <stdlib.h>
 #include <stdarg.h>
 
-
-#define FORMAT_FLAG_LEFT_JUSTIFY   (1u << 0)
-#define FORMAT_FLAG_PAD_ZERO       (1u << 1)
-#define FORMAT_FLAG_PRINT_SIGN     (1u << 2)
-#define FORMAT_FLAG_ALTERNATE      (1u << 3)
-
 /*********************************************************************
 *
 *       Types
@@ -134,6 +128,14 @@ static void _StoreChar(SEGGER_RTT_PRINTF_DESC * p, char c) {
     }
   }
 }
+
+#if defined(SEGGER_RTT_USE_LEGACY_PRINTF)
+
+#define FORMAT_FLAG_LEFT_JUSTIFY   (1u << 0)
+#define FORMAT_FLAG_PAD_ZERO       (1u << 1)
+#define FORMAT_FLAG_PRINT_SIGN     (1u << 2)
+#define FORMAT_FLAG_ALTERNATE      (1u << 3)
+
 
 /*********************************************************************
 *
@@ -466,6 +468,39 @@ int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * pPa
   }
   return BufferDesc.ReturnValue;
 }
+
+#else
+
+#include "tiny_printf.h"
+
+static void write_buffer(char c, void *arg) {
+  if (c != 0) {
+    _StoreChar((SEGGER_RTT_PRINTF_DESC *)arg, c);
+  }
+}
+
+int SEGGER_RTT_vprintf(unsigned BufferIndex, const char *sFormat, va_list *pParamList) {
+  SEGGER_RTT_PRINTF_DESC BufferDesc;
+  char acBuffer[SEGGER_RTT_PRINTF_BUFFER_SIZE];
+  BufferDesc.pBuffer        = acBuffer;
+  BufferDesc.BufferSize     = SEGGER_RTT_PRINTF_BUFFER_SIZE;
+  BufferDesc.Cnt            = 0u;
+  BufferDesc.RTTBufferIndex = BufferIndex;
+  BufferDesc.ReturnValue    = 0;
+
+  tiny_vfctprintf(write_buffer, &BufferDesc, sFormat, *pParamList);
+
+  if (BufferDesc.ReturnValue > 0) {
+    if (BufferDesc.Cnt != 0u) {
+      SEGGER_RTT_Write(BufferIndex, acBuffer, BufferDesc.Cnt);
+    }
+    BufferDesc.ReturnValue += (int)BufferDesc.Cnt;
+  }
+
+  return BufferDesc.ReturnValue;
+}
+
+#endif
 
 /*********************************************************************
 *

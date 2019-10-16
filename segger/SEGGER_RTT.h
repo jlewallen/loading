@@ -166,6 +166,7 @@ unsigned     SEGGER_RTT_HasDataUp               (unsigned BufferIndex);
 void         SEGGER_RTT_Init                    (void);
 unsigned     SEGGER_RTT_Read                    (unsigned BufferIndex,       void* pBuffer, unsigned BufferSize);
 unsigned     SEGGER_RTT_ReadNoLock              (unsigned BufferIndex,       void* pData,   unsigned BufferSize);
+unsigned     SEGGER_RTT_ReadUpNoLock            (unsigned BufferIndex,       void* pData,   unsigned BufferSize);
 int          SEGGER_RTT_SetNameDownBuffer       (unsigned BufferIndex, const char* sName);
 int          SEGGER_RTT_SetNameUpBuffer         (unsigned BufferIndex, const char* sName);
 int          SEGGER_RTT_SetFlagsDownBuffer      (unsigned BufferIndex, unsigned Flags);

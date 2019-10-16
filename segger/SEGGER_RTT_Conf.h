@@ -75,15 +75,34 @@ Revision: $Rev: 13430 $
 */
 #define SEGGER_RTT_SECTION                        ".rtt.control"
 #define SEGGER_RTT_BUFFER_SECTION                 ".rtt.buffers"
-#define SEGGER_RTT_MAX_NUM_UP_BUFFERS             (2)     // Max. number of up-buffers (T->H) available on this target    (Default: 3)
-#define SEGGER_RTT_MAX_NUM_DOWN_BUFFERS           (2)     // Max. number of down-buffers (H->T) available on this target  (Default: 3)
 
+#if !defined(SEGGER_RTT_MAX_NUM_UP_BUFFERS)
+#define SEGGER_RTT_MAX_NUM_UP_BUFFERS             (2)     // Max. number of up-buffers (T->H) available on this target    (Default: 3)
+#endif
+
+#if !defined(SEGGER_RTT_MAX_NUM_DOWN_BUFFERS)
+#define SEGGER_RTT_MAX_NUM_DOWN_BUFFERS           (2)     // Max. number of down-buffers (H->T) available on this target  (Default: 3)
+#endif
+
+#if defined(SEGGER_RTT_BUFFER_SIZE_UP)
+#define BUFFER_SIZE_UP                            SEGGER_RTT_BUFFER_SIZE_UP
+#endif
+
+#if defined(SEGGER_RTT_BUFFER_SIZE_DOWN)
+#define BUFFER_SIZE_DOWN                          SEGGER_RTT_BUFFER_SIZE_DOWN
+#endif
+
+#if !defined(BUFFER_SIZE_UP)
 #define BUFFER_SIZE_UP                            (1024)  // Size of the buffer for terminal output of target, up to host (Default: 1k)
+#endif
+
+#if !defined(BUFFER_SIZE_DOWN)
 #define BUFFER_SIZE_DOWN                          (16)    // Size of the buffer for terminal input to target from host (Usually keyboard input) (Default: 16)
+#endif
 
 #define SEGGER_RTT_PRINTF_BUFFER_SIZE             (64u)    // Size of buffer for RTT printf to bulk-send chars via RTT     (Default: 64)
 
-#define SEGGER_RTT_MODE_DEFAULT                   SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL // Mode for pre-initialized terminal channel (buffer 0)
+#define SEGGER_RTT_MODE_DEFAULT                   SEGGER_RTT_MODE_NO_BLOCK_SKIP // Mode for pre-initialized terminal channel (buffer 0)
 
 /*********************************************************************
 *
@@ -118,9 +137,8 @@ Revision: $Rev: 13430 $
 // Default configuration in FreeRTOS: configMAX_SYSCALL_INTERRUPT_PRIORITY: ( configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) )
 // In case of doubt mask all interrupts: 1 << (8 - BASEPRI_PRIO_BITS) i.e. 1 << 5 when 3 bits are implemented in NVIC
 // or define SEGGER_RTT_LOCK() to completely disable interrupts.
-//
 
-#define SEGGER_RTT_MAX_INTERRUPT_PRIORITY         (0x20)   // Interrupt priority to lock on SEGGER_RTT_LOCK on Cortex-M3/4 (Default: 0x20)
+#define SEGGER_RTT_MAX_INTERRUPT_PRIORITY         (1 << 5)
 
 /*********************************************************************
 *
@@ -128,7 +146,7 @@ Revision: $Rev: 13430 $
 *       Rowley CrossStudio and GCC
 */
 #if (defined __SES_ARM) || (defined __CROSSWORKS_ARM) || (defined __GNUC__) || (defined __clang__)
-  #if (defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__))
+  #if (defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__)) || defined(__SAMD51__)
     #define SEGGER_RTT_LOCK()   {                                                                   \
                                     unsigned int LockState;                                         \
                                   __asm volatile ("mrs   %0, basepri  \n\t"                         \
@@ -147,16 +165,6 @@ Revision: $Rev: 13430 $
                                 }
 
   #endif
-#endif
-
-#if defined(__SAMD51__)
-#include <sam.h>
-
-#undef SEGGER_RTT_LOCK
-#undef SEGGER_RTT_UNLOCK
-
-#define SEGGER_RTT_LOCK()    __disable_irq()
-#define SEGGER_RTT_UNLOCK()  __enable_irq()
 #endif
 
 /*********************************************************************

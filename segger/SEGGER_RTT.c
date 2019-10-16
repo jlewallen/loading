@@ -505,6 +505,98 @@ static unsigned _GetAvailWriteSpace(SEGGER_RTT_BUFFER_UP* pRing) {
 *
 **********************************************************************
 */
+
+/*********************************************************************
+*
+*       SEGGER_RTT_ReadUpNoLock()
+*
+*  Function description
+*    Reads characters from SEGGER real-time-terminal control block
+*    which have been previously stored by the host.
+*    Do not lock against interrupts and multiple access.
+*
+*  Parameters
+*    BufferIndex  Index of Down-buffer to be used (e.g. 0 for "Terminal").
+*    pBuffer      Pointer to buffer provided by target application, to copy characters from RTT-down-buffer to.
+*    BufferSize   Size of the target application buffer.
+*
+*  Return value
+*    Number of bytes that have been read.
+*/
+unsigned SEGGER_RTT_ReadUpNoLock(unsigned BufferIndex, void* pData, unsigned BufferSize) {
+  unsigned                NumBytesRem;
+  unsigned                NumBytesRead;
+  unsigned                RdOff;
+  unsigned                WrOff;
+  unsigned char*          pBuffer;
+  SEGGER_RTT_BUFFER_UP*   pRing;
+#if SEGGER_RTT_MEMCPY_USE_BYTELOOP
+  const char*             pSrc;
+#endif
+  //
+  INIT();
+  pRing = &_SEGGER_RTT.aUp[BufferIndex];
+  pBuffer = (unsigned char*)pData;
+  RdOff = pRing->RdOff;
+  WrOff = pRing->WrOff;
+  NumBytesRead = 0u;
+  //
+  // Read from current read position to wrap-around of buffer, first
+  //
+  if (RdOff > WrOff) {
+    NumBytesRem = pRing->SizeOfBuffer - RdOff;
+    NumBytesRem = MIN(NumBytesRem, BufferSize);
+#if SEGGER_RTT_MEMCPY_USE_BYTELOOP
+    pSrc = pRing->pBuffer + RdOff;
+    NumBytesRead += NumBytesRem;
+    BufferSize   -= NumBytesRem;
+    RdOff        += NumBytesRem;
+    while (NumBytesRem--) {
+      *pBuffer++ = *pSrc++;
+    };
+#else
+    SEGGER_RTT_MEMCPY(pBuffer, pRing->pBuffer + RdOff, NumBytesRem);
+    NumBytesRead += NumBytesRem;
+    pBuffer      += NumBytesRem;
+    BufferSize   -= NumBytesRem;
+    RdOff        += NumBytesRem;
+#endif
+    //
+    // Handle wrap-around of buffer
+    //
+    if (RdOff == pRing->SizeOfBuffer) {
+      RdOff = 0u;
+    }
+  }
+  //
+  // Read remaining items of buffer
+  //
+  NumBytesRem = WrOff - RdOff;
+  NumBytesRem = MIN(NumBytesRem, BufferSize);
+  if (NumBytesRem > 0u) {
+#if SEGGER_RTT_MEMCPY_USE_BYTELOOP
+    pSrc = pRing->pBuffer + RdOff;
+    NumBytesRead += NumBytesRem;
+    BufferSize   -= NumBytesRem;
+    RdOff        += NumBytesRem;
+    while (NumBytesRem--) {
+      *pBuffer++ = *pSrc++;
+    };
+#else
+    SEGGER_RTT_MEMCPY(pBuffer, pRing->pBuffer + RdOff, NumBytesRem);
+    NumBytesRead += NumBytesRem;
+    pBuffer      += NumBytesRem;
+    BufferSize   -= NumBytesRem;
+    RdOff        += NumBytesRem;
+#endif
+  }
+  if (NumBytesRead) {
+    pRing->RdOff = RdOff;
+  }
+  //
+  return NumBytesRead;
+}
+
 /*********************************************************************
 *
 *       SEGGER_RTT_ReadNoLock()

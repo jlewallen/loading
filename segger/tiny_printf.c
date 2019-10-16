@@ -46,6 +46,8 @@ extern "C" {
 // ftoa conversion buffer size, this must be big enough to hold
 // one converted float number including padded zeros (dynamically created on stack)
 // 32 byte is a good default
+#if defined(TINY_PRINTF_FEATURES_SMALL)
+#else
 #define PRINTF_FTOA_BUFFER_SIZE    32U
 
 // define this to support floating point (%f)
@@ -57,6 +59,7 @@ extern "C" {
 // define this to support the ptrdiff_t type (%t)
 // ptrdiff_t is normally defined in <stddef.h> as long or long long type
 #define PRINTF_SUPPORT_PTRDIFF_T
+#endif
 
 
 ///////////////////////////////////////////////////////////////////////////////
