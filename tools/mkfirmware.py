@@ -12,8 +12,9 @@ import lief
 import hashlib
 import platform
 import threading
-
 import utilities
+
+from collections import defaultdict
 
 class FkbWriter:
     def __init__(self, elf_analyzer, fkb_path):
@@ -281,12 +282,29 @@ class ElfAnalyzer:
             # print(cs.virtual_address, r.offset - cs.virtual_address)
             # print(r.section.name, len(code_raw))
 
-    def find_relocations(self):
-        self.symbols = {}
-        self.relocations = []
-        self.verbose = False
+    def get_relocations_in_binary(self):
+        started = time.time()
 
-        skipping = {
+        bySectionNameIndex = defaultdict(list)
+        for r in self.binary.relocations:
+            bySectionNameIndex[r.section.name_idx].append(r)
+
+        logging.info("Done %f", time.time() - started)
+
+        relocations = []
+
+        skipping = self.get_sections_to_skip()
+
+        for s in self.binary.sections:
+            if s.name not in skipping:
+                relocations += bySectionNameIndex[s.name_idx]
+
+        logging.info("Done %f", time.time() - started)
+
+        return relocations
+
+    def get_sections_to_skip(self):
+        return {
             ".debug_loc": 0,
             ".debug_frame": 0,
             ".debug_info": 0,
@@ -294,6 +312,13 @@ class ElfAnalyzer:
             ".debug_ranges": 0,
             ".debug_aranges": 0,
         }
+
+    def find_relocations(self):
+        self.symbols = {}
+        self.relocations = []
+        self.verbose = False
+
+        skipping = self.get_sections_to_skip()
 
         symbols = {}
 
@@ -317,35 +342,36 @@ class ElfAnalyzer:
         logging.info("External: %d", len([s for s in symbols if symbols[s] == "external"]))
         logging.info("Locals: %d", len([s for s in symbols if symbols[s] == "local"]))
 
-        relocations = utilities.get_relocations_in_elf(self.elf_path, elf_symbols)
-        local_relocations = []
-        foreign_relocations = []
-        if len(relocations) > 0:
-            for r in relocations:
-                if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL:
-                    continue
-                if symbols[r.symbol.name] == "local" or symbols[r.symbol.name] == "exported":
-                    values = (r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
-                    logging.info("Local relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
-                    self.investigate_code_relocation(r)
-                elif symbols[r.symbol.name] == "external":
-                    values = (r.symbol.size, relocation_type_name(r.type), r.symbol.type, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
-                    logging.info("Foreign relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
-                    self.investigate_code_relocation(r)
+        started = time.time()
 
-            for r in relocations:
-                if r.section.name in skipping:
-                    continue
-                if r.type != lief.ELF.RELOCATION_ARM.ABS32:
-                    continue
-                if not r.has_symbol:
-                    continue
-                values = (r.symbol.size, utilities.relocation_type_name(r.type), r.symbol.type, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
-                logging.info("DATA: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
-                self.investigate_data_relocation(r)
+        if False:
+            relocations = utilities.get_relocations_in_elf(self.elf_path, elf_symbols)
+            if len(relocations) > 0:
+                for r in relocations:
+                    if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL:
+                        continue
+                    if symbols[r.symbol.name] == "local" or symbols[r.symbol.name] == "exported":
+                        values = (r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
+                        logging.info("Local relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
+                        self.investigate_code_relocation(r)
+                    elif symbols[r.symbol.name] == "external":
+                        values = (r.symbol.size, relocation_type_name(r.type), r.symbol.type, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
+                        logging.info("Foreign relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
+                        self.investigate_code_relocation(r)
+
+                for r in relocations:
+                    if r.section.name in skipping:
+                        continue
+                    if r.type != lief.ELF.RELOCATION_ARM.ABS32:
+                        continue
+                    if not r.has_symbol:
+                        continue
+                    values = (r.symbol.size, utilities.relocation_type_name(r.type), r.symbol.type, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
+                    logging.info("DATA: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
+                    self.investigate_data_relocation(r)
 
         if True:
-            for r in self.binary.relocations:
+            for r in self.get_relocations_in_binary():
                 display = False
                 got_offset = 0
                 fixed = None
