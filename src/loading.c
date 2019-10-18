@@ -7,11 +7,6 @@
 #include <sam.h>
 #include <SEGGER_RTT.h>
 
-__attribute__((section(".fkb.launch")))
-fkb_launch_info_t fkb_launch_info = {
-    .memory_used = 0,
-};
-
 extern void invoke_pic(void *entry, uint32_t got);
 
 extern void delay(uint32_t ms);

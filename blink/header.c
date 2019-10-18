@@ -25,5 +25,5 @@ const fkb_header_t fkb_header = {
 
 __attribute__((section(".fkb.launch")))
 fkb_launch_info_t fkb_launch_info = {
-    .memory_used = 0,
+    .upgrading = 0,
 };

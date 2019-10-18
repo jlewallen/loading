@@ -64,7 +64,7 @@ typedef struct fkb_relocation_t {
 } fkb_relocation_t;
 
 typedef struct fkb_launch_info_t {
-    uint32_t memory_used;
+    uint32_t upgrading;
 } fkb_launch_info_t;
 
 extern fkb_launch_info_t fkb_launch_info;
