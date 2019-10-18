@@ -395,7 +395,7 @@ class ElfAnalyzer:
                     rel_offset = struct.unpack_from("<I", raw, fixed)[0]
                     # NOTE This should be the same for all relocations for this symbol!
                     self.add_relocation(r.symbol, r.symbol.value, rel_offset)
-                    display = True
+                    # display = True
 
                 if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
                     # S (when used on its own) is the address of the symbol.
@@ -406,7 +406,7 @@ class ElfAnalyzer:
                     raw = self.raw_section_data(r.section)
                     rel_offset = struct.unpack_from("<I", raw, fixed)[0]
                     self.add_relocation(r.symbol, r.symbol.value, rel_offset)
-                    display = True
+                    # display = True
 
                 if display:
                     if fixed is None:

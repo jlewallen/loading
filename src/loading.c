@@ -103,10 +103,13 @@ uint32_t analyse_table(fkb_header_t *header) {
                          header->firmware.got_offset, &__data_start__);
 
     fkb_symbol_t *syms = get_first_symbol(header);
-    fkb_symbol_t *s = syms;
-    for (uint32_t i = 0; i < header->number_symbols; ++i) {
-        fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, s->size, s->name);
-        s++;
+
+    if (0) {
+        fkb_symbol_t *s = syms;
+        for (uint32_t i = 0; i < header->number_symbols; ++i) {
+            fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, s->size, s->name);
+            s++;
+        }
     }
 
     fkb_relocation_t *r = get_first_relocation(header);
@@ -116,8 +119,10 @@ uint32_t analyse_table(fkb_header_t *header) {
         allocation_t alloc;
 
         if (!is_valid_pointer(rel)) {
-            fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=%s allocated=0x%8x s.size=0x%4x s.addr=0x%8x of='%s'",
-                                 base, i, r->offset, "<invalid>", alloc.ptr, sym->size, sym->address, sym->name);
+            if (0) {
+                fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=%s allocated=0x%8x s.size=0x%4x s.addr=0x%8x of='%s'",
+                                     base, i, r->offset, "<invalid>", alloc.ptr, sym->size, sym->address, sym->name);
+            }
             r++;
             continue;
         }
@@ -126,8 +131,10 @@ uint32_t analyse_table(fkb_header_t *header) {
 
         uint32_t old_value = *rel;
 
-        fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=0x%8x allocated=0x%8x s.size=0x%4x s.addr=0x%8x old=0x%8x of='%s'",
-                             base, i, r->offset, rel, alloc.ptr, sym->size, sym->address, old_value, sym->name);
+        if (0) {
+            fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=0x%8x allocated=0x%8x s.size=0x%4x s.addr=0x%8x old=0x%8x of='%s'",
+                                 base, i, r->offset, rel, alloc.ptr, sym->size, sym->address, old_value, sym->name);
+        }
 
         if (sym->size == 0) {
             *rel = (uint32_t)sym->address;
