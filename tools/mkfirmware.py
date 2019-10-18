@@ -70,6 +70,19 @@ class FkbHeader:
     def has_invalid_name(self, value):
         return len(value) == 0 or value[0] == '\0' or value[0] == 0
 
+    def add_table_section(self, ea, table):
+        binary_size_before = ea.get_binary_size()
+
+        section = lief.ELF.Section()
+        section.name = ".data.wtf"
+        section.type = lief.ELF.SECTION_TYPES.PROGBITS
+        section.content = table
+        section.add(lief.ELF.SECTION_FLAGS.WRITE)
+        section.add(lief.ELF.SECTION_FLAGS.ALLOC)
+        section.alignment = 4
+        section = ea.binary.add(section, True)
+        section.virtual_address = binary_size_before + 0x4000
+
     def populate(self, ea, name):
         self.symbols = bytearray()
         self.relocations = bytearray()
@@ -106,6 +119,8 @@ class FkbHeader:
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 0x22000 - 0x8000
+
+        self.add_table_section(ea, self.symbols + self.relocations)
 
         got = ea.got()
         if got:
