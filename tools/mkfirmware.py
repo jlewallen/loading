@@ -81,7 +81,7 @@ class FkbHeader:
         section.add(lief.ELF.SECTION_FLAGS.ALLOC)
         section.alignment = 4
         section = ea.binary.add(section, True)
-        section.virtual_address = binary_size_before + 0x4000
+        section.virtual_address = binary_size_before + 0x8000
 
     def populate(self, ea, name):
         self.symbols = bytearray()
