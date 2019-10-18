@@ -379,62 +379,61 @@ class ElfAnalyzer:
                     logging.info("DATA: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
                     self.investigate_data_relocation(r)
 
-        if True:
-            got_origin = self.got_origin()
-            for r in self.get_relocations_in_binary():
-                display = False
-                rel_offset = 0
-                fixed = None
+        got_origin = self.got_origin()
+        for r in self.get_relocations_in_binary():
+            display = False
+            rel_offset = 0
+            fixed = None
 
-                if r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
-                    # A is the addend for the relocation
-                    # GOT_ORG is the addressing origin of the Global Offset
-                    #  Table (the indirection table for imported data
-                    #  addresses). This value must always be word-aligned. See
-                    #  4.6.1.8, Proxy generating relocations.
-                    # GOT(S) is the address of the GOT entry for the symbol
-                    # GOT(S) + A -GOT_ORG
-                    fixed = r.address - r.section.virtual_address
-                    raw = self.raw_section_data(r.section)
-                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                    # NOTE This should be the same for all relocations for this symbol!
-                    self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
-                    # display = True
+            if r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
+                # A is the addend for the relocation
+                # GOT_ORG is the addressing origin of the Global Offset
+                #  Table (the indirection table for imported data
+                #  addresses). This value must always be word-aligned. See
+                #  4.6.1.8, Proxy generating relocations.
+                # GOT(S) is the address of the GOT entry for the symbol
+                # GOT(S) + A -GOT_ORG
+                fixed = r.address - r.section.virtual_address
+                raw = self.raw_section_data(r.section)
+                rel_offset = struct.unpack_from("<I", raw, fixed)[0]
+                # NOTE This should be the same for all relocations for this symbol!
+                self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
+                # display = True
 
-                if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
-                    # S (when used on its own) is the address of the symbol.
-                    # A is the addend for the relocation
-                    # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
-                    # (S + A) | T
-                    fixed = r.address - r.section.virtual_address
-                    raw = self.raw_section_data(r.section)
-                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                    self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
-                    # display = True
+            if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
+                # S (when used on its own) is the address of the symbol.
+                # A is the addend for the relocation
+                # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
+                # (S + A) | T
+                fixed = r.address - r.section.virtual_address
+                raw = self.raw_section_data(r.section)
+                rel_offset = struct.unpack_from("<I", raw, fixed)[0]
+                self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
+                # display = True
 
-                if display:
-                    if fixed is None:
-                        fixed = "<none>"
-                    else:
-                        fixed = "0x%x" % (fixed)
+            if display:
+                if fixed is None:
+                    fixed = "<none>"
+                else:
+                    fixed = "0x%x" % (fixed)
 
-                    rel = self.got_origin() + rel_offset
+                rel = self.got_origin() + rel_offset
 
-                    values = (r.symbol.name, r.symbol.size, r.symbol.value, r.symbol.type, r.symbol.binding,
-                              r.address, r.size, r.addend, utilities.relocation_type_name(r.type),
-                              r.section.name, r.section.virtual_address,
-                              fixed, rel_offset, rel)
-                    logging.info("Relocation: %-50s s.size(0x%4x) s.value=0x%8x s.type=%-22s s.binding=%-26s r.address=0x%8x r.size=0x%4x r.addend=%s r.type=%-10s section=(%s, va=0x%8x) fixed=%10s rel_offset=0x%8x rel=0x%8x" % values)
+                values = (r.symbol.name, r.symbol.size, r.symbol.value, r.symbol.type, r.symbol.binding,
+                            r.address, r.size, r.addend, utilities.relocation_type_name(r.type),
+                            r.section.name, r.section.virtual_address,
+                            fixed, rel_offset, rel)
+                logging.info("Relocation: %-50s s.size(0x%4x) s.value=0x%8x s.type=%-22s s.binding=%-26s r.address=0x%8x r.size=0x%4x r.addend=%s r.type=%-10s section=(%s, va=0x%8x) fixed=%10s rel_offset=0x%8x rel=0x%8x" % values)
 
-                if self.verbose:
-                    symbol = r.symbol
-                    logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
-                                  "has_symbol", r.has_symbol, "info", r.info, "is_rel", r.is_rel, "is_rela",
-                                  r.is_rela, "purpose", r.purpose, "section", r.section, "size", r.size, "type", r.type))
-                    logging.info(('name', symbol.name, 'binding', symbol.binding,
-                                  'exported', symbol.exported, 'other', symbol.other, 'function', symbol.is_function,
-                                  'static', symbol.is_static, 'var', symbol.is_variable, 'info', symbol.information,
-                                  'shndx', symbol.shndx, 'size', symbol.size, 'type', symbol.type, 'value', symbol.value))
+            if self.verbose:
+                symbol = r.symbol
+                logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
+                                "has_symbol", r.has_symbol, "info", r.info, "is_rel", r.is_rel, "is_rela",
+                                r.is_rela, "purpose", r.purpose, "section", r.section, "size", r.size, "type", r.type))
+                logging.info(('name', symbol.name, 'binding', symbol.binding,
+                                'exported', symbol.exported, 'other', symbol.other, 'function', symbol.is_function,
+                                'static', symbol.is_static, 'var', symbol.is_variable, 'info', symbol.information,
+                                'shndx', symbol.shndx, 'size', symbol.size, 'type', symbol.type, 'value', symbol.value))
 
         if False:
             for r in self.binary.dynamic_symbols:
