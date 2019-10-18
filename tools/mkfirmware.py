@@ -105,7 +105,7 @@ class FkbHeader:
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
-        self.fields[self.VTOR_OFFSET_FIELD] = 0x4000
+        self.fields[self.VTOR_OFFSET_FIELD] = 0x22000 - 0x4000
 
         got = ea.got()
         if got:
