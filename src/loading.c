@@ -100,11 +100,12 @@ uint32_t analyse_table(fkb_header_t *header) {
 
     fkb_symbol_t *syms = get_first_symbol(header);
     fkb_relocation_t *r = get_first_relocation(header);
+    uint8_t *end_of_binary = (uint8_t *)(r + header->number_relocations);
 
     fkb_external_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
                          header->number_symbols, header->number_relocations,
                          header->firmware.got_offset, &__data_start__);
-    fkb_external_println("bl: [0x%08x] first-sym=0x%x first-relocation=0x%x", base, syms, r);
+    fkb_external_println("bl: [0x%08x] first-sym=0x%x first-relocation=0x%x end-of-binary=0x%x", base, syms, r, end_of_binary);
 
     if (0) {
         fkb_symbol_t *s = syms;
@@ -137,12 +138,7 @@ uint32_t analyse_table(fkb_header_t *header) {
                                  base, i, r->offset, rel, alloc.ptr, sym->size, sym->address, old_value, sym->name);
         }
 
-        if (sym->size == 0) {
-            *rel = (uint32_t)sym->address;
-        }
-        else {
-            *rel = (uint32_t)sym->address;
-        }
+        *rel = (uint32_t)sym->address;
 
         r++;
     }
