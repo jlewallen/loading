@@ -451,7 +451,6 @@ class ElfAnalyzer:
         logging.info("relocations done")
 
     def add_relocation(self, symbol, address, offset):
-        print(symbol)
         if not symbol in self.symbols:
             type = 0
             if symbol.type == lief.ELF.SYMBOL_TYPES.FUNC:
