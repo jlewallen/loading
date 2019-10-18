@@ -313,6 +313,12 @@ class ElfAnalyzer:
             ".debug_aranges": 0,
         }
 
+    def got_origin(self):
+        got = self.got()
+        if got:
+            return got.virtual_address
+        return 0
+
     def find_relocations(self):
         self.symbols = {}
         self.relocations = []
@@ -374,9 +380,7 @@ class ElfAnalyzer:
                     self.investigate_data_relocation(r)
 
         if True:
-            got = self.got()
-            got_origin = 0
-            if got: got_origin = got.virtual_address
+            got_origin = self.got_origin()
             for r in self.get_relocations_in_binary():
                 display = False
                 rel_offset = 0
@@ -394,7 +398,7 @@ class ElfAnalyzer:
                     raw = self.raw_section_data(r.section)
                     rel_offset = struct.unpack_from("<I", raw, fixed)[0]
                     # NOTE This should be the same for all relocations for this symbol!
-                    self.add_relocation(r.symbol, r.symbol.value, rel_offset)
+                    self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
                     # display = True
 
                 if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
@@ -405,7 +409,7 @@ class ElfAnalyzer:
                     fixed = r.address - r.section.virtual_address
                     raw = self.raw_section_data(r.section)
                     rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                    self.add_relocation(r.symbol, r.symbol.value, rel_offset)
+                    self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
                     # display = True
 
                 if display:
@@ -414,7 +418,7 @@ class ElfAnalyzer:
                     else:
                         fixed = "0x%x" % (fixed)
 
-                    rel = got_origin + rel_offset
+                    rel = self.got_origin() + rel_offset
 
                     values = (r.symbol.name, r.symbol.size, r.symbol.value, r.symbol.type, r.symbol.binding,
                               r.address, r.size, r.addend, utilities.relocation_type_name(r.type),
@@ -450,7 +454,10 @@ class ElfAnalyzer:
 
         logging.info("relocations done")
 
-    def add_relocation(self, symbol, address, offset):
+    def add_relocation(self, symbol, address, got_origin, offset):
+        rel = got_origin + offset
+        if rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
+            return
         if not symbol in self.symbols:
             type = 0
             if symbol.type == lief.ELF.SYMBOL_TYPES.FUNC:
