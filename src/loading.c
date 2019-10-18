@@ -98,11 +98,13 @@ uint32_t analyse_table(fkb_header_t *header) {
     uint8_t *base = (uint8_t *)header;
     uint8_t *ptr = base + sizeof(fkb_header_t);
 
+    fkb_symbol_t *syms = get_first_symbol(header);
+    fkb_relocation_t *r = get_first_relocation(header);
+
     fkb_external_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
                          header->number_symbols, header->number_relocations,
                          header->firmware.got_offset, &__data_start__);
-
-    fkb_symbol_t *syms = get_first_symbol(header);
+    fkb_external_println("bl: [0x%08x] first-sym=0x%x first-relocation=0x%x", base, syms, r);
 
     if (0) {
         fkb_symbol_t *s = syms;
@@ -112,7 +114,6 @@ uint32_t analyse_table(fkb_header_t *header) {
         }
     }
 
-    fkb_relocation_t *r = get_first_relocation(header);
     for (uint32_t i = 0; i < header->number_relocations; ++i) {
         fkb_symbol_t *sym = &syms[r->symbol];
         uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
@@ -197,8 +198,8 @@ static uint8_t has_valid_signature(void *ptr) {
 }
 
 static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
-    uint8_t *base = (uint8_t *)header;
-    return (fkb_symbol_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * symbol);
+    uint8_t *base = (uint8_t *)header + header->firmware.binary_size;
+    return (fkb_symbol_t *)(base + sizeof(fkb_symbol_t) * symbol);
 }
 
 static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
@@ -206,8 +207,8 @@ static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
 }
 
 static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header;
-    return (fkb_relocation_t *)(base + sizeof(fkb_header_t) + sizeof(fkb_symbol_t) * header->number_symbols);
+    uint8_t *base = (uint8_t *)header + header->firmware.binary_size;
+    return (fkb_relocation_t *)(base + sizeof(fkb_symbol_t) * header->number_symbols);
 }
 
 static uint32_t aligned_on(uint32_t value, uint32_t on) {
