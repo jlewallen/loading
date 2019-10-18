@@ -74,6 +74,7 @@ typedef struct allocation_t {
 uint8_t get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol, allocation_t *alloc) {
     uint8_t *top = (uint8_t *)&__heap_top;
 
+    alloc->ptr = NULL;
     alloc->allocated = 0;
 
     if (strcmp(symbol->name, "_SEGGER_RTT") == 0) {
@@ -86,28 +87,16 @@ uint8_t get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol, allocatio
         return 0;
     }
 
-    fkb_symbol_t *s = get_first_symbol(header);
-    for (uint32_t i = 0; i < header->number_symbols; ++i) {
-        uint32_t allocated = aligned_on(s->size, 4);
+    return 0;
+}
 
-        if (s == symbol) {
-            alloc->ptr = (void *)top;
-            alloc->allocated = allocated;
-            return 0;
-        }
-
-        top += allocated;
-        s++;
-    }
-
-    return 1;
+uint8_t is_valid_pointer(uint32_t *p) {
+    return (uint32_t)p >= 0x20000000 && (uint32_t)p < 0x20000000 + 0x00040000;
 }
 
 uint32_t analyse_table(fkb_header_t *header) {
     uint8_t *base = (uint8_t *)header;
     uint8_t *ptr = base + sizeof(fkb_header_t);
-
-    fkb_launch_info.memory_used = 0;
 
     fkb_external_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
                          header->number_symbols, header->number_relocations,
@@ -116,7 +105,7 @@ uint32_t analyse_table(fkb_header_t *header) {
     fkb_symbol_t *syms = get_first_symbol(header);
     fkb_symbol_t *s = syms;
     for (uint32_t i = 0; i < header->number_symbols; ++i) {
-        fkb_external_println("bl: [0x%08x] symbol='%s' size=0x%x", base, s->name, s->size);
+        fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, s->size, s->name);
         s++;
     }
 
@@ -126,18 +115,25 @@ uint32_t analyse_table(fkb_header_t *header) {
         uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
         allocation_t alloc;
 
+        if (!is_valid_pointer(rel)) {
+            fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=%s allocated=0x%8x s.size=0x%4x s.addr=0x%8x of='%s'",
+                                 base, i, r->offset, "<invalid>", alloc.ptr, sym->size, sym->address, sym->name);
+            r++;
+            continue;
+        }
+
         get_symbol_address(header, sym, &alloc);
 
-        fkb_external_println("bl: [0x%08x] relocation offset=0x%8x rel=0x%8x allocated=0x%8x size=0x%4x addr=0x%8x of='%s'",
-                             base, r->offset, rel, alloc.ptr, sym->size, sym->address, sym->name);
+        uint32_t old_value = *rel;
+
+        fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=0x%8x allocated=0x%8x s.size=0x%4x s.addr=0x%8x old=0x%8x of='%s'",
+                             base, i, r->offset, rel, alloc.ptr, sym->size, sym->address, old_value, sym->name);
 
         if (sym->size == 0) {
             *rel = (uint32_t)sym->address;
         }
         else {
-            *rel = (uint32_t)alloc.ptr;
             *rel = (uint32_t)sym->address;
-            fkb_launch_info.memory_used += alloc.allocated;
         }
 
         r++;
