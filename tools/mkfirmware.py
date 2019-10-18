@@ -74,7 +74,7 @@ class FkbHeader:
         binary_size_before = ea.get_binary_size()
 
         section = lief.ELF.Section()
-        section.name = ".data.wtf"
+        section.name = ".data.fkdyn"
         section.type = lief.ELF.SECTION_TYPES.PROGBITS
         section.content = table
         section.add(lief.ELF.SECTION_FLAGS.WRITE)
@@ -108,17 +108,13 @@ class FkbHeader:
 
         offset = self.aligned(self.table_size, 1024)
         logging.info("Offset: %d", offset)
-        # self.extra = bytearray([0] * (offset - self.min_size))
-
-        if self.table_size > len(self.extra):
-            raise Exception("Table overflowed: %d > %d" % (self.table_size, len(self.extra)))
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
-        self.fields[self.VTOR_OFFSET_FIELD] = 0x22000 - 0x8000
+        self.fields[self.VTOR_OFFSET_FIELD] = 1024
 
         self.add_table_section(ea, self.symbols + self.relocations)
 
@@ -173,7 +169,7 @@ class FkbHeader:
         logging.info("Dynamic: syms=%d rels=%d" % (self.fields[self.NUMBER_SYMBOLS_FIELD], self.fields[self.NUMBER_RELOCATIONS_FIELD]))
         logging.info("Dynamic: size=%d" % (self.table_size))
 
-        return new_header + self.symbols + self.relocations + self.extra[self.table_size:]
+        return new_header + self.extra
 
 class ElfAnalyzer:
     def __init__(self, elf_path):
