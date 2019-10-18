@@ -74,18 +74,18 @@ class FkbHeader:
         self.symbols = bytearray()
         self.relocations = bytearray()
 
+        # Address in the symbol table we write to the image seems totally wrong...
         indices = {}
         index = 0
-        for symbol_name in ea.symbols:
-            s = ea.symbols[symbol_name]
-            if len(s) >= 24:
-                raise Exception("Symbol name too long")
+        for symbol in ea.symbols:
+            s = ea.symbols[symbol]
             try:
-                self.symbols += struct.pack('<III24s', s[0], s[1], s[2], bytes(symbol_name, 'utf-8'))
+                #logging.info("%x %x %x %s" % (s[0], s[1], s[2], symbol.name))
+                self.symbols += struct.pack('<III24s', s[0], s[1], s[2], bytes(symbol.name, 'utf-8'))
             except:
-                raise Exception("Error packing symbol: %s %d %d %d" % (symbol_name, s[0], s[1], s[2]))
+                raise Exception("Error packing symbol: %s %d %d %d" % (symbol.name, s[0], s[1], s[2]))
 
-            indices[symbol_name] = index
+            indices[symbol] = index
             index += 1
 
         for r in ea.relocations:
@@ -320,23 +320,26 @@ class ElfAnalyzer:
 
         skipping = self.get_sections_to_skip()
 
-        symbols = {}
+        symbols = utilities.RejectingDict()
 
         nsections = len(self.binary.sections)
         elf_symbols = utilities.get_symbols_in_elf(self.elf_path)
-        for symbol in elf_symbols.values():
+
+        logging.info("Number of Symbols: %d (%d)" % (len(elf_symbols), len(self.binary.symbols)))
+
+        for symbol in elf_symbols:
             if symbol.name in ["$t", "$d", ""]:
                 continue
 
             if symbol.binding == lief.ELF.SYMBOL_BINDINGS.GLOBAL:
                 if symbol.exported or symbol.shndx != 0:
-                    symbols[symbol.name] = "exported"
+                    symbols[symbol.index] = "exported"
                 else:
-                    symbols[symbol.name] = "external"
+                    symbols[symbol.index] = "external"
                     logging.info("External: %s", symbol.name)
             else:
                 if symbol.type != lief.ELF.SYMBOL_TYPES.FILE:
-                    symbols[symbol.name] = "local"
+                    symbols[symbol.index] = "local"
 
         logging.info("Exported: %d", len([s for s in symbols if symbols[s] == "exported"]))
         logging.info("External: %d", len([s for s in symbols if symbols[s] == "external"]))
@@ -350,13 +353,13 @@ class ElfAnalyzer:
                 for r in relocations:
                     if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL:
                         continue
-                    if symbols[r.symbol.name] == "local" or symbols[r.symbol.name] == "exported":
+                    if symbols[r.symbol.index] == "local" or symbols[r.symbol.index] == "exported":
                         values = (r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
-                        logging.info("Local relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
+                        logging.info("Local relocation: size(0x%4x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
                         self.investigate_code_relocation(r)
-                    elif symbols[r.symbol.name] == "external":
+                    elif symbols[r.symbol.index] == "external":
                         values = (r.symbol.size, relocation_type_name(r.type), r.symbol.type, r.symbol.value, r.offset, r.section.name, r.section.virtual_address, r.symbol.name)
-                        logging.info("Foreign relocation: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
+                        logging.info("Foreign relocation: size(0x%4x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s" % values)
                         self.investigate_code_relocation(r)
 
                 for r in relocations:
@@ -371,28 +374,13 @@ class ElfAnalyzer:
                     self.investigate_data_relocation(r)
 
         if True:
+            got = self.got()
+            got_origin = 0
+            if got: got_origin = got.virtual_address
             for r in self.get_relocations_in_binary():
                 display = False
-                got_offset = 0
+                rel_offset = 0
                 fixed = None
-
-                if r.section.name in [".data", ".got"]:
-                    # values = (r.symbol.name, r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.section.virtual_address, r.symbol.type, r.symbol.value, r.address)
-                    # logging.info("DATA: %s size(0x%x) (%s) section=(%s, va=0x%x) TYPE=%s VALUE=0x%x offset=0x%x" % values)
-                    display = True
-                else:
-                    if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL and r.type != lief.ELF.RELOCATION_ARM.ABS32:
-                        if False:
-                            values = (r.symbol.name, r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.section.virtual_address, r.symbol.type)
-                            logging.info("IGNORING: %s size(0x%x) (%s) section=(%s, va=0x%x) TYPE=%s" % values)
-                            continue
-                    if r.symbol.binding != lief.ELF.SYMBOL_BINDINGS.GLOBAL:
-                        if False:
-                            values = (r.symbol.name, r.symbol.size, utilities.relocation_type_name(r.type), r.section.name, r.section.virtual_address, r.symbol.type)
-                            logging.info("IGNORING: %s size(0x%x) (%s) section=(%s, va=0x%x) TYPE=%s" % values)
-                            continue
-                    if r.section.name in skipping:
-                        continue
 
                 if r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
                     # A is the addend for the relocation
@@ -404,19 +392,20 @@ class ElfAnalyzer:
                     # GOT(S) + A -GOT_ORG
                     fixed = r.address - r.section.virtual_address
                     raw = self.raw_section_data(r.section)
-                    got_offset = struct.unpack_from("<I", raw, fixed)[0]
+                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
                     # NOTE This should be the same for all relocations for this symbol!
-                    self.add_relocation(r.symbol, r.symbol.value, got_offset)
+                    self.add_relocation(r.symbol, r.symbol.value, rel_offset)
                     display = True
 
-                if r.type == lief.ELF.RELOCATION_ARM.ABS32:
+                if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
                     # S (when used on its own) is the address of the symbol.
                     # A is the addend for the relocation
                     # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
                     # (S + A) | T
                     fixed = r.address - r.section.virtual_address
                     raw = self.raw_section_data(r.section)
-                    got_offset = struct.unpack_from("<I", raw, fixed)[0]
+                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
+                    self.add_relocation(r.symbol, r.symbol.value, rel_offset)
                     display = True
 
                 if display:
@@ -425,13 +414,15 @@ class ElfAnalyzer:
                     else:
                         fixed = "0x%x" % (fixed)
 
+                    rel = got_origin + rel_offset
+
                     values = (r.symbol.name, r.symbol.size, r.symbol.value, r.symbol.type, r.symbol.binding,
                               r.address, r.size, r.addend, utilities.relocation_type_name(r.type),
                               r.section.name, r.section.virtual_address,
-                              fixed, got_offset)
-                    logging.info("Relocation: %-50s s.size(0x%4x) s.value=0x%8x s.type=%-22s s.binding=%-26s r.address=0x%8x r.size=0x%4x r.addend=%s r.type=%-10s section=(%s, va=0x%8x) fixed=%10s got_offset=0x%8x" % values)
+                              fixed, rel_offset, rel)
+                    logging.info("Relocation: %-50s s.size(0x%4x) s.value=0x%8x s.type=%-22s s.binding=%-26s r.address=0x%8x r.size=0x%4x r.addend=%s r.type=%-10s section=(%s, va=0x%8x) fixed=%10s rel_offset=0x%8x rel=0x%8x" % values)
 
-                if self.verbose and False:
+                if self.verbose:
                     symbol = r.symbol
                     logging.info(("addend", r.addend, "address", r.address, "has_section", r.has_section,
                                   "has_symbol", r.has_symbol, "info", r.info, "is_rel", r.is_rel, "is_rela",
@@ -460,17 +451,17 @@ class ElfAnalyzer:
         logging.info("relocations done")
 
     def add_relocation(self, symbol, address, offset):
-        name = str(symbol.name)
-        if not name in self.symbols:
+        print(symbol)
+        if not symbol in self.symbols:
             type = 0
             if symbol.type == lief.ELF.SYMBOL_TYPES.FUNC:
                 type = 1
-            self.symbols[name] = (type, symbol.size, address, [])
+            self.symbols[symbol] = (type, symbol.size, address, [])
 
-        s = self.symbols[name]
+        s = self.symbols[symbol]
         s[3].append(offset)
 
-        self.relocations.append([name, offset])
+        self.relocations.append([symbol, offset])
 
     def analyse(self):
         started = time.time()

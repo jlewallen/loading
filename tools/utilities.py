@@ -1,4 +1,5 @@
 import lief
+import logging
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.relocation import RelocationSection
@@ -7,7 +8,7 @@ from elftools.elf.relocation import RelocationSection
 from elftools.elf.descriptions import describe_reloc_type
 
 class Symbol:
-    def __init__(self, section, s):
+    def __init__(self, section, index, s):
         self.name = s.name
         sbind = s['st_info']['bind']
         if sbind == "STB_GLOBAL": self.binding = lief.ELF.SYMBOL_BINDINGS.GLOBAL
@@ -23,6 +24,7 @@ class Symbol:
         elif stype == "STT_SECTION": self.type = lief.ELF.SYMBOL_TYPES.SECTION
         else: raise Exception("Unknown stype: '%s'" % (stype))
 
+        self.index = index
         self.size = int(s['st_size'])
         self.shndx = s['st_shndx']
         try:
@@ -50,10 +52,11 @@ class Relocation:
         elif stype == "R_ARM_REL32": self.type = lief.ELF.RELOCATION_ARM.REL32
         else: raise Exception("Unknown rel type: '%s'" % (stype))
 
-        s = symtable.get_symbol(r['r_info_sym'])
+        symbol_index = r['r_info_sym']
+        s = symtable.get_symbol(symbol_index)
         if s['st_name'] != 0:
             self.name = str(s.name)
-            self.symbol = symbol_objects[s.name]
+            self.symbol = symbol_objects[symbol_index]
             self.has_symbol = True
         else:
             self.has_symbol = False
@@ -69,15 +72,23 @@ class Relocation:
         self.value = s["st_value"]
         self.address = s["st_value"]
 
+# http://stackoverflow.com/a/4999321
+class RejectingDict(dict):
+    def __setitem__(self, k, v):
+        if k in self.keys():
+            if self[k] != v:
+                raise ValueError("Key '%s' is already present value = (%s) new value = (%s)" % (str(k), str(self[k]), str(v)))
+        else:
+            return super(RejectingDict, self).__setitem__(k, v)
+
 def get_symbols_in_elf(path):
-    symbols = {}
+    symbols = []
     with open(path, "rb") as f:
         elf = ELFFile(f)
         for section in elf.iter_sections():
             if isinstance(section, SymbolTableSection):
-                for symbol in section.iter_symbols():
-                    s = Symbol(section, symbol)
-                    symbols[s.name] = s
+                for i, symbol in enumerate(section.iter_symbols()):
+                    symbols.append(Symbol(section, i, symbol))
     return symbols
 
 def get_relocations_in_elf(path, symbol_objects):
