@@ -67,11 +67,26 @@ typedef struct fkb_launch_info_t {
     uint32_t upgrading;
 } fkb_launch_info_t;
 
+typedef struct fkb_exec_state_t {
+    uint32_t *vtor;
+    uint32_t *sp;
+    uint32_t *entry;
+    uint32_t *got;
+} fkb_exec_state_t;
+
+#define FKB_EXEC_STATE_OK           (0)
+#define FKB_EXEC_STATE_BAD_VTOR    (-1)
+#define FKB_EXEC_STATE_BAD_SP      (-2)
+
+uint32_t fkb_verify_exec_state(fkb_header_t *fkbh, fkb_exec_state_t *fkes);
+
 extern fkb_launch_info_t fkb_launch_info;
+
+fkb_header_t *fkb_try_header(void *ptr);
 
 uint32_t fkb_find_and_launch(void *ptr);
 
-uint32_t fkb_try_launch(uint32_t *base, uint32_t got);
+uint32_t fkb_try_launch(fkb_header_t *fkbh);
 
 uint32_t fkb_external_printf(const char *str, ...);
 

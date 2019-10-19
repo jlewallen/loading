@@ -7,7 +7,7 @@
 #include <sam.h>
 #include <SEGGER_RTT.h>
 
-extern void invoke_pic(void *entry, uint32_t got);
+extern void invoke_pic(uint32_t sp, void *entry, uint32_t got);
 
 extern void delay(uint32_t ms);
 
@@ -22,41 +22,56 @@ static fkb_relocation_t *get_first_relocation(fkb_header_t *header);
 static uint32_t aligned_on(uint32_t value, uint32_t on);
 static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size);
 
-uint32_t fkb_try_launch(uint32_t *base, uint32_t got) {
-    /* Make sure vector table address of app is aligned. */
-    if (((uint32_t)(base) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
-        fkb_external_println("bl: [0x%08x] no vector table", base);
-        return 0;
+fkb_header_t *fkb_try_header(void *ptr) {
+    if (!has_valid_signature(ptr)) {
+        return NULL;
     }
 
-    /* Do nothing if SP is invalid. */
-    if (*base <= (uint32_t)&__cm_ram_origin) {
-        fkb_external_println("bl: [0x%08x] invalid SP value (0x%08x)", base, *base);
-        return 0;
+    return (fkb_header_t *)ptr;
+}
+
+uint32_t fkb_verify_exec_state(fkb_header_t *fkbh, fkb_exec_state_t *fkes) {
+    uint32_t *vtor = (uint32_t *)((uint8_t *)fkbh + fkbh->firmware.vtor_offset);
+
+    fkes->vtor = vtor;
+    fkes->sp = (uint32_t *)*vtor;
+    fkes->entry = (uint32_t *)*(vtor + 1);
+    fkes->got = (uint32_t *)((uint8_t *)&__cm_ram_origin + fkbh->firmware.got_offset);
+
+    /* Make sure vector table address of app is aligned. */
+    if (((uint32_t)(vtor) & ~SCB_VTOR_TBLOFF_Msk) != 0x00) {
+        fkb_external_println("bl: [0x%08x] no vector table", fkbh);
+        return FKB_EXEC_STATE_BAD_VTOR;
     }
 
     /* Do nothing if vector pointer is erased. */
-    if (*base == 0xFFFFFFFF) {
-        fkb_external_println("bl: [0x%08x] erased cell", base);
+    if ((uint32_t)fkes->sp == 0xFFFFFFFF) {
+        fkb_external_println("bl: [0x%08x] erased cell", fkbh);
+        return FKB_EXEC_STATE_BAD_SP;
+    }
+
+    /* Do nothing if SP is invalid. */
+    if ((uint32_t)fkes->sp <= (uint32_t)&__cm_ram_origin) {
+        fkb_external_println("bl: [0x%08x] invalid SP value (0x%08x)", fkbh, fkes->sp);
+        return FKB_EXEC_STATE_BAD_SP;
+    }
+
+    return FKB_EXEC_STATE_OK;
+}
+
+uint32_t fkb_try_launch(fkb_header_t *fkbh) {
+    fkb_exec_state_t fkes;
+
+    if (fkb_verify_exec_state(fkbh, &fkes) != FKB_EXEC_STATE_OK) {
         return 0;
     }
 
-    /* Get entry address, skip over initial SP. */
-    uint32_t *entry_function = (uint32_t *)base + 1;
-
-    if (0) {
-        fkb_external_println("bl: [0x%08x] execution disabled (entry=0x%p)", base, entry_function);
-        return 1;
-    }
-
     /* Ok, so we're doing this! */
-    fkb_external_println("bl: [0x%08x] executing (sp=0x%p) (entry=0x%p) (got=0x%x)", base, *base, *entry_function, got);
+    fkb_external_println("bl: [0x%08x] executing (sp=0x%p) (entry=0x%p) (got=0x%x)", fkbh, fkes.sp, fkes.entry, fkes.got);
 
-    __set_MSP((uint32_t)(*base));
+    SCB->VTOR = ((uint32_t)fkes.vtor & SCB_VTOR_TBLOFF_Msk);
 
-    SCB->VTOR = ((uint32_t)(base) & SCB_VTOR_TBLOFF_Msk);
-
-    invoke_pic((void *)*entry_function, got);
+    invoke_pic((uint32_t)fkes.sp, (void *)fkes.entry, (uint32_t)fkes.got);
 
     return 0;
 }
@@ -147,11 +162,10 @@ uint32_t fkb_find_and_launch(void *ptr) {
     while (1) {
         fkb_external_println("bl: [0x%08p] checking for header", ptr);
 
-        if (!has_valid_signature(ptr)) {
+        fkb_header_t *fkbh = fkb_try_header(ptr);
+        if (fkbh == NULL) {
             break;
         }
-
-        fkb_header_t *fkbh = (fkb_header_t *)ptr;
 
         selected = fkbh;
 
@@ -176,11 +190,7 @@ uint32_t fkb_find_and_launch(void *ptr) {
         return 0;
     }
 
-    /* This will need some future customization. I'm considering also placing
-     * the header after the vector table, which is more efficient. */
-    uint32_t *vtor = (uint32_t *)((uint8_t *)selected + selected->firmware.vtor_offset);
-
-    return fkb_try_launch(vtor, (uint32_t)((uint8_t *)&__cm_ram_origin + selected->firmware.got_offset));
+    return fkb_try_launch(selected);
 }
 
 static uint8_t has_valid_signature(void *ptr) {
@@ -216,8 +226,6 @@ static uint32_t aligned_on(uint32_t value, uint32_t on) {
 }
 
 static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size) {
-    // ASSERT(buffer_length > (size * 2));
-
     for (size_t i = 0; i < size; ++i) {
         buffer[i * 2    ] = "0123456789abcdef"[ptr[i] >> 4];
         buffer[i * 2 + 1] = "0123456789abcdef"[ptr[i] & 0x0F];

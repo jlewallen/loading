@@ -6,8 +6,9 @@ invoke_pic:
         .fnstart
         .cantunwind
 
-        mov     r9, r1
-        bx      r0
+        msr     MSP, r0
+        mov     r9, r2
+        bx      r1
 
         .fnend
         .size   invoke_pic, .-invoke_pic
