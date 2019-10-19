@@ -188,8 +188,17 @@ static uint8_t has_valid_signature(void *ptr) {
     return strcmp(fkbh->signature, "FKB") == 0;
 }
 
+
+static uint32_t sizeof_symbols(fkb_header_t *header) {
+    return sizeof(fkb_symbol_t) * header->number_symbols;
+}
+
+static uint32_t sizeof_relocations(fkb_header_t *header) {
+    return sizeof(fkb_relocation_t) * header->number_relocations;
+}
+
 static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
-    uint8_t *base = (uint8_t *)header + header->firmware.binary_size;
+    uint8_t *base = (uint8_t *)header + header->firmware.binary_size - sizeof_symbols(header) - sizeof_relocations(header);
     return (fkb_symbol_t *)(base + sizeof(fkb_symbol_t) * symbol);
 }
 
@@ -198,8 +207,8 @@ static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
 }
 
 static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header + header->firmware.binary_size;
-    return (fkb_relocation_t *)(base + sizeof(fkb_symbol_t) * header->number_symbols);
+    uint8_t *base = (uint8_t *)header + header->firmware.binary_size - sizeof_relocations(header);
+    return (fkb_relocation_t *)base;
 }
 
 static uint32_t aligned_on(uint32_t value, uint32_t on) {

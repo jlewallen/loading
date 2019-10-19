@@ -110,7 +110,7 @@ class FkbHeader:
         logging.info("Offset: %d", offset)
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
-        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size() + len(self.symbols) + len(self.relocations)
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
