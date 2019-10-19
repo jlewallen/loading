@@ -93,8 +93,7 @@ class FkbHeader:
         for symbol in ea.symbols:
             s = ea.symbols[symbol]
             try:
-                #logging.info("%x %x %x %s" % (s[0], s[1], s[2], symbol.name))
-                self.symbols += struct.pack('<III24s', s[0], s[1], s[2], bytes(symbol.name, 'utf-8'))
+                self.symbols += struct.pack('<I24s', s[2], bytes(symbol.name, 'utf-8'))
             except:
                 raise Exception("Error packing symbol: %s %d %d %d" % (symbol.name, s[0], s[1], s[2]))
 

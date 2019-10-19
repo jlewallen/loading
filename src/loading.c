@@ -120,7 +120,7 @@ uint32_t analyse_table(fkb_header_t *header) {
     if (0) {
         fkb_symbol_t *s = syms;
         for (uint32_t i = 0; i < header->number_symbols; ++i) {
-            fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, s->size, s->name);
+            fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, /*s->size*/0, s->name);
             s++;
         }
     }
@@ -133,7 +133,7 @@ uint32_t analyse_table(fkb_header_t *header) {
         if (!is_valid_pointer(rel)) {
             if (0) {
                 fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=%s allocated=0x%8x s.size=0x%4x s.addr=0x%8x of='%s'",
-                                     base, i, r->offset, "<invalid>", alloc.ptr, sym->size, sym->address, sym->name);
+                                     base, i, r->offset, "<invalid>", alloc.ptr, /*sym->size*/0, sym->address, sym->name);
             }
             r++;
             continue;
@@ -145,7 +145,7 @@ uint32_t analyse_table(fkb_header_t *header) {
 
         if (0) {
             fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=0x%8x allocated=0x%8x s.size=0x%4x s.addr=0x%8x old=0x%8x of='%s'",
-                                 base, i, r->offset, rel, alloc.ptr, sym->size, sym->address, old_value, sym->name);
+                                 base, i, r->offset, rel, alloc.ptr, /*sym->size*/0, sym->address, old_value, sym->name);
         }
 
         *rel = (uint32_t)sym->address;

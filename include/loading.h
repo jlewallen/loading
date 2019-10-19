@@ -52,8 +52,6 @@ typedef struct fkb_header_t {
 #define FKB_SYMBOL_TYPE_FUNC       (1)
 
 typedef struct fkb_symbol_t {
-    uint32_t type;
-    uint32_t size;
     uint32_t address;
     uint8_t  name[24];
 } fkb_symbol_t;
