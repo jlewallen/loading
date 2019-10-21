@@ -18,13 +18,7 @@ void delay(uint32_t ms);
 uint32_t launch() {
     fkb_external_println("bl: looking for executable...");
 
-    /* Look for FKB headers... */
-    if (fkb_find_and_launch((void *)&__cm_app_vectors_ptr)) {
-        return 0;
-    }
-
-    /* Fall back on a regular old firmware launch */
-    return fkb_try_launch(&__cm_app_vectors_ptr, 0);
+    return fkb_find_and_launch((void *)&__cm_app_vectors_ptr);
 }
 
 uint32_t main() {
