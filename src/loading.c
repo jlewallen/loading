@@ -169,9 +169,9 @@ uint32_t fkb_find_and_launch(void *ptr) {
 
         selected = fkbh;
 
-        fkb_external_println("bl: [0x%08p] found '%s' / #%lu '%s' flags=0x%x size=%lu data=%lu bss=%lu got=%lu vtor=0x%x", ptr,
+        fkb_external_println("bl: [0x%08p] found '%s' / #%lu '%s' flags=0x%x size=%lu dyntables=+%lu data=%lu bss=%lu got=%lu vtor=0x%x", ptr,
                              fkbh->firmware.name, fkbh->firmware.number, fkbh->firmware.version,
-                             fkbh->firmware.flags, fkbh->firmware.binary_size,
+                             fkbh->firmware.flags, fkbh->firmware.binary_size, fkbh->firmware.tables_offset,
                              fkbh->firmware.data_size, fkbh->firmware.bss_size, fkbh->firmware.got_size,
                              fkbh->firmware.vtor_offset);
 
@@ -208,7 +208,7 @@ static uint32_t sizeof_relocations(fkb_header_t *header) {
 }
 
 static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
-    uint8_t *base = (uint8_t *)header + header->firmware.binary_size - sizeof_symbols(header) - sizeof_relocations(header);
+    uint8_t *base = (uint8_t *)header + header->firmware.tables_offset;
     return (fkb_symbol_t *)(base + sizeof(fkb_symbol_t) * symbol);
 }
 
@@ -217,7 +217,7 @@ static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
 }
 
 static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header + header->firmware.binary_size - sizeof_relocations(header);
+    uint8_t *base = (uint8_t *)header + header->firmware.tables_offset + sizeof_symbols(header);
     return (fkb_relocation_t *)base;
 }
 
