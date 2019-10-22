@@ -5,6 +5,7 @@ import sys
 import struct
 import time
 import datetime
+import subprocess
 import argparse
 import hashlib
 import logging
@@ -13,13 +14,15 @@ import hashlib
 import platform
 import threading
 import utilities
+import pyblake2
 
 from collections import defaultdict
 
 class FkbWriter:
-    def __init__(self, elf_analyzer, fkb_path):
+    def __init__(self, elf_analyzer, fkb_path, increase_size_by):
         self.elf = elf_analyzer
         self.fkb_path = fkb_path
+        self.increase_size_by = increase_size_by
 
     def process(self, name):
         fkbh_section = self.elf.fkbheader()
@@ -34,7 +37,7 @@ class FkbWriter:
     def populate_header(self, section, name):
         header = FkbHeader(self.fkb_path)
         header.read(section.content)
-        header.populate(self.elf, name)
+        header.populate(self.elf, name, self.increase_size_by)
         section.content = header.write(self.elf)
 
 class FkbHeader:
@@ -83,7 +86,7 @@ class FkbHeader:
         section = ea.binary.add(section, True)
         section.virtual_address = binary_size_before + 0x8000
 
-    def populate(self, ea, name):
+    def populate(self, ea, name, increase_size_by):
         self.symbols = bytearray()
         self.relocations = bytearray()
 
@@ -109,7 +112,7 @@ class FkbHeader:
         logging.info("Offset: %d", offset)
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
-        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size() + len(self.symbols) + len(self.relocations)
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size() + len(self.symbols) + len(self.relocations) + increase_size_by
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
@@ -491,6 +494,25 @@ def configure_logging():
         lief.Logger.set_verbose_level(10)
     logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.INFO)
 
+def make_binary(elf_path, bin_path):
+    command = [ "arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path ]
+    print("Exporting '%s' to '%s'" % (elf_path, bin_path))
+    print(" ".join(command))
+    subprocess.run(command, check=True)
+
+    print("Calculating hash of '%s'" % (bin_path))
+    b2 = pyblake2.blake2b(digest_size=32)
+    with open(bin_path, 'rb') as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            b2.update(data)
+        print(b2.hexdigest())
+
+    with open(bin_path, 'ab') as f:
+        f.write(b2.digest())
+
 class MkModuleArgs:
     def __init__(self):
         self.no_debug = False
@@ -503,17 +525,24 @@ def main():
     parser.add_argument('--no-debug', dest="no_debug", action="store_true", help="Don't show debug data (default: false)")
     parser.add_argument('--elf', dest="elf_path", default=None, help="")
     parser.add_argument('--fkb', dest="fkb_path", default=None, help="")
+    parser.add_argument('--bin', dest="bin_path", default=None, help="")
     parser.add_argument('--name', dest="name", default=None, help="")
     args, nargs = parser.parse_known_args()
 
     if args.elf_path:
         logging.info("Processing %s...", args.elf_path)
 
+        increase_size_by = 0
+        if args.bin_path:
+            increase_size_by = 32
+
         ea = ElfAnalyzer(args.elf_path)
         ea.analyse()
         if args.fkb_path:
-            fw = FkbWriter(ea, args.fkb_path)
+            fw = FkbWriter(ea, args.fkb_path, increase_size_by)
             fw.process(args.name)
+            if args.bin_path:
+                make_binary(args.fkb_path, args.bin_path)
 
 if __name__ == "__main__":
     main()
