@@ -547,8 +547,11 @@ def main():
         if args.fkb_path:
             fw = FkbWriter(ea, args.fkb_path, increase_size_by)
             fw.process(args.name)
-            if args.bin_path:
-                make_binary(args.fkb_path, args.bin_path)
+    if args.bin_path:
+        if args.fkb_path:
+            make_binary(args.fkb_path, args.bin_path)
+        elif args.elf_path:
+            make_binary(args.elf_path, args.bin_path)
 
 if __name__ == "__main__":
     main()
