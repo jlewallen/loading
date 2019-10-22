@@ -513,6 +513,9 @@ def make_binary(elf_path, bin_path):
             b2.update(data)
         print(b2.hexdigest())
 
+    with open(bin_path + ".b2sum", "w") as f:
+        f.write(b2.hexdigest())
+
     with open(bin_path, 'ab') as f:
         f.write(b2.digest())
 
