@@ -46,19 +46,20 @@ class FkbHeader:
     BUILD_NUMBER_FIELD       = 5
     VERSION_FIELD            = 6
     BINARY_SIZE_FIELD        = 7
-    BINARY_DATA_FIELD        = 8
-    BINARY_BSS_FIELD         = 9
-    BINARY_GOT_FIELD         = 10
-    VTOR_OFFSET_FIELD        = 11
-    GOT_OFFSET_FIELD         = 12
-    NAME_FIELD               = 13
-    HASH_SIZE_FIELD          = 14
-    HASH_FIELD               = 15
-    NUMBER_SYMBOLS_FIELD     = 16
-    NUMBER_RELOCATIONS_FIELD = 17
+    TABLES_OFFSET_FIELD      = 8
+    BINARY_DATA_FIELD        = 9
+    BINARY_BSS_FIELD         = 10
+    BINARY_GOT_FIELD         = 11
+    VTOR_OFFSET_FIELD        = 12
+    GOT_OFFSET_FIELD         = 13
+    NAME_FIELD               = 14
+    HASH_SIZE_FIELD          = 15
+    HASH_FIELD               = 16
+    NUMBER_SYMBOLS_FIELD     = 17
+    NUMBER_RELOCATIONS_FIELD = 18
 
     def __init__(self, fkb_path):
-        self.min_packspec = '<4sIIIII16sIIIIII256sI128sII'
+        self.min_packspec = '<4sIIIII16sIIIIIII256sI128sII'
         self.min_size = struct.calcsize(self.min_packspec)
         self.fkb_path = fkb_path
 
@@ -70,18 +71,20 @@ class FkbHeader:
     def has_invalid_name(self, value):
         return len(value) == 0 or value[0] == '\0' or value[0] == 0
 
-    def add_table_section(self, ea, table):
+    def add_table_section(self, ea, table, table_alignment):
         binary_size_before = ea.get_binary_size()
 
+        extra_padding = self.aligned(len(table), table_alignment) - len(table)
         section = lief.ELF.Section()
         section.name = ".data.fkdyn"
         section.type = lief.ELF.SECTION_TYPES.PROGBITS
-        section.content = table
+        section.content = table + bytearray([0] * extra_padding)
         section.add(lief.ELF.SECTION_FLAGS.WRITE)
         section.add(lief.ELF.SECTION_FLAGS.ALLOC)
         section.alignment = 4
         section = ea.binary.add(section, True)
         section.virtual_address = binary_size_before + 0x8000
+        logging.info("Dynamic table virtual address: 0x%x" % (section.virtual_address) )
 
     def populate(self, ea, name):
         self.symbols = bytearray()
@@ -103,19 +106,18 @@ class FkbHeader:
         for r in ea.relocations:
             self.relocations += struct.pack('<II', indices[r[0]], r[1])
 
-        self.table_size = len(self.symbols) + len(self.relocations)
-
-        offset = self.aligned(self.table_size, 1024)
-        logging.info("Offset: %d", offset)
+        table_alignment = 2048
+        self.table_size = self.aligned(len(self.symbols) + len(self.relocations), table_alignment)
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
-        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size() + len(self.symbols) + len(self.relocations)
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size() + self.table_size
+        self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 1024
 
-        self.add_table_section(ea, self.symbols + self.relocations)
+        self.add_table_section(ea, self.symbols + self.relocations, table_alignment)
 
         got = ea.got()
         if got:
@@ -155,6 +157,7 @@ class FkbHeader:
         logging.info("Data Size: %d" % (ea.get_data_size()))
         logging.info(" BSS Size: %d" % (ea.get_bss_size()))
         logging.info(" GOT Size: %d" % (ea.get_got_size()))
+        logging.info(" Dyn size: %d" % (self.table_size))
 
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Version: %s" % (self.fields[self.VERSION_FIELD]))

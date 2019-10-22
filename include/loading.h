@@ -28,6 +28,7 @@ typedef struct fkb_firmware_t {
     uint32_t number;
     uint8_t version[16];
     uint32_t binary_size;
+    uint32_t tables_offset;
     uint32_t data_size;
     uint32_t bss_size;
     uint32_t got_size;
