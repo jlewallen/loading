@@ -207,6 +207,18 @@ class ElfAnalyzer:
         except:
             return None
 
+    def code(self):
+        try:
+            return self.binary.get_section(".text")
+        except:
+            return None
+
+    def data(self):
+        try:
+            return self.binary.get_section(".data")
+        except:
+            return None
+
     def got(self):
         try:
             return self.binary.get_section(".got")
@@ -251,20 +263,12 @@ class ElfAnalyzer:
     def calculate_hash(self):
         algo = hashlib.sha1()
         algo.update(bytearray(self.code().content))
-        algo.update(bytearray(self.data().content))
+        if self.data():
+            algo.update(bytearray(self.data().content))
         return algo.digest()
 
     def get_code_address(self):
-        return self.binary.get_section(".text").virtual_address
-
-    def code(self):
-        return self.binary.get_section(".text")
-
-    def data(self):
-        return self.binary.get_section(".data")
-
-    def bss(self):
-        return self.binary.get_section(".bss")
+        return self.code().virtual_address
 
     def raw_section_data(self, section):
         if isinstance(section, utilities.Section):
