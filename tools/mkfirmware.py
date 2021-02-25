@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from typing import List, Union, Dict, Optional, Any
+
 import os
 import sys
 import struct
@@ -20,12 +22,12 @@ from collections import defaultdict
 
 
 class FkbWriter:
-    def __init__(self, elf_analyzer, fkb_path, increase_size_by):
+    def __init__(self, elf_analyzer, fkb_path: str, increase_size_by):
         self.elf = elf_analyzer
-        self.fkb_path = fkb_path
+        self.fkb_path: str = fkb_path
         self.increase_size_by = increase_size_by
 
-    def process(self, name):
+    def process(self, name: str):
         fkbh_section = self.elf.fkbheader()
         if fkbh_section:
             logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
@@ -35,7 +37,7 @@ class FkbWriter:
 
         self.elf.binary.write(self.fkb_path)
 
-    def populate_header(self, section, name):
+    def populate_header(self, section, name: str):
         header = FkbHeader(self.fkb_path)
         header.read(section.content)
         header.populate(self.elf, name, self.increase_size_by)
@@ -63,7 +65,7 @@ class FkbHeader:
     NUMBER_SYMBOLS_FIELD = 17
     NUMBER_RELOCATIONS_FIELD = 18
 
-    def __init__(self, fkb_path):
+    def __init__(self, fkb_path: str):
         self.min_packspec = "<4sIIIII16sIIIIIII256sI128sII"
         self.min_size = struct.calcsize(self.min_packspec)
         self.fkb_path = fkb_path
@@ -75,7 +77,7 @@ class FkbHeader:
             struct.unpack(self.min_packspec, bytearray(data[: self.min_size]))
         )
 
-    def has_invalid_name(self, value):
+    def has_invalid_name(self, value: str):
         return len(value) == 0 or value[0] == "\0" or value[0] == 0
 
     def add_table_section(self, ea, table, table_alignment):
@@ -90,10 +92,16 @@ class FkbHeader:
         section.add(lief.ELF.SECTION_FLAGS.ALLOC)
         section.alignment = 4
         section = ea.binary.add(section, True)
-        section.virtual_address = binary_size_before + 0x8000
-        logging.info("Dynamic table virtual address: 0x%x" % (section.virtual_address))
+        if False:
+            section.virtual_address = binary_size_before + 0x8000
+        if True:
+            section.virtual_address = binary_size_before
+        logging.info(
+            "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
+            % (len(table), section.virtual_address, len(section.content), extra_padding)
+        )
 
-    def populate(self, ea, name, increase_size_by):
+    def populate(self, ea, name: str, increase_size_by):
         self.symbols = bytearray()
         self.relocations = bytearray()
 
@@ -119,6 +127,11 @@ class FkbHeader:
         table_alignment = 2048
         self.table_size = self.aligned(
             len(self.symbols) + len(self.relocations), table_alignment
+        )
+
+        logging.info(
+            "Table size: %d (%d)"
+            % (len(self.symbols) + len(self.relocations), self.table_size)
         )
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
@@ -197,8 +210,8 @@ class FkbHeader:
 
 
 class ElfAnalyzer:
-    def __init__(self, elf_path):
-        self.elf_path = elf_path
+    def __init__(self, elf_path: str):
+        self.elf_path: str = elf_path
         self.raw_cache = {}
 
     def fkbheader(self):
@@ -231,10 +244,10 @@ class ElfAnalyzer:
         except:
             return None
 
-    def timestamp(self):
+    def timestamp(self) -> int:
         return int(os.path.getmtime(self.elf_path))
 
-    def get_data_size(self):
+    def get_data_size(self) -> int:
         size = 0
         for section in self.binary.sections:
             if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
@@ -242,17 +255,17 @@ class ElfAnalyzer:
 
         return size - self.get_got_size() - self.get_bss_size()
 
-    def get_got_size(self):
+    def get_got_size(self) -> int:
         if self.got() is None:
             return 0
         return self.got().size
 
-    def get_bss_size(self):
+    def get_bss_size(self) -> int:
         if self.bss() is None:
             return 0
         return self.bss().size
 
-    def get_binary_size(self):
+    def get_binary_size(self) -> int:
         size = 0
         for section in self.binary.sections:
             if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
@@ -267,7 +280,7 @@ class ElfAnalyzer:
             algo.update(bytearray(self.data().content))
         return algo.digest()
 
-    def get_code_address(self):
+    def get_code_address(self) -> int:
         return self.code().virtual_address
 
     def raw_section_data(self, section):
@@ -285,7 +298,7 @@ class ElfAnalyzer:
         logging.info("Processing %s (%d)", section.name, len(byte_data))
         return byte_data
 
-    def get_section_by_address(self, address):
+    def get_section_by_address(self, address: int):
         for section in self.binary.sections:
             if section.name in [".rel.data", ".rel.text"]:
                 continue
@@ -310,6 +323,7 @@ class ElfAnalyzer:
 
     def investigate_data_relocation(self, r):
         if r.offset >= 0x20000000:
+            logging.info("skipping relocation (r.offset = 0x%x)" % (r.offset))
             return
         section = self.get_section_by_address(r.offset)
         if section:
