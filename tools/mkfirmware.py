@@ -271,6 +271,7 @@ class ElfAnalyzer:
         return self.code().virtual_address
 
     def raw_section_data(self, section):
+        assert section
         if isinstance(section, utilities.Section):
             for s in self.binary.sections:
                 if s.name == section.name:
@@ -314,9 +315,10 @@ class ElfAnalyzer:
         if section:
             section_raw = self.raw_section_data(section)
         cs = self.code()
+        assert cs
         ds = self.data()
         code_raw = self.raw_section_data(cs)
-        data_raw = self.raw_section_data(ds)
+        data_raw = self.raw_section_data(ds) if ds else None
         try:
             if r.offset - cs.virtual_address < len(code_raw):
                 offset = struct.unpack_from(
@@ -335,9 +337,9 @@ class ElfAnalyzer:
     def get_relocations_in_binary(self):
         started = time.time()
 
-        bySectionNameIndex = defaultdict(list)
+        by_section_name_index = defaultdict(list)
         for r in self.binary.relocations:
-            bySectionNameIndex[r.section.name_idx].append(r)
+            by_section_name_index[r.section.name_idx].append(r)
 
         logging.info("Done %f", time.time() - started)
 
@@ -347,7 +349,7 @@ class ElfAnalyzer:
 
         for s in self.binary.sections:
             if s.name not in skipping:
-                relocations += bySectionNameIndex[s.name_idx]
+                relocations += by_section_name_index[s.name_idx]
 
         logging.info("Done %f", time.time() - started)
 
@@ -402,9 +404,11 @@ class ElfAnalyzer:
         logging.info(
             "Exported: %d", len([s for s in symbols if symbols[s] == "exported"])
         )
+
         logging.info(
             "External: %d", len([s for s in symbols if symbols[s] == "external"])
         )
+
         logging.info("Locals: %d", len([s for s in symbols if symbols[s] == "local"]))
 
         started = time.time()
@@ -608,19 +612,23 @@ class ElfAnalyzer:
             for r in self.binary.pltgot_relocations:
                 logging.info("pg: %s", r)
 
-        logging.info("relocations done")
+        logging.info("Relocations Done")
 
-    def add_relocation(self, symbol, address, got_origin, offset):
-        rel = got_origin + offset
-        if rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
-            return
+    def add_symbol(self, symbol, address):
         if not symbol in self.symbols:
             type = 0
             if symbol.type == lief.ELF.SYMBOL_TYPES.FUNC:
                 type = 1
             self.symbols[symbol] = (type, symbol.size, address, [])
+        return self.symbols[symbol]
 
-        s = self.symbols[symbol]
+    def add_relocation(self, symbol, address, got_origin, offset):
+        rel = got_origin + offset
+        if rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
+            return
+
+        s = self.add_symbol(symbol, address)
+
         s[3].append(offset)
 
         self.relocations.append([symbol, offset])
