@@ -1,7 +1,11 @@
 BUILD ?= $(abspath build)
 SHELL := /bin/bash
 
-default: all
+default: setup all
+
+setup:
+	python3 --version || true
+	python --version || true
 
 $(BUILD):
 	mkdir -p $(BUILD)
