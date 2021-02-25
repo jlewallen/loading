@@ -70,6 +70,8 @@ class Relocation:
             self.type = lief.ELF.RELOCATION_ARM.PREL31
         elif stype == "R_ARM_REL32":
             self.type = lief.ELF.RELOCATION_ARM.REL32
+        elif stype == "R_ARM_JUMP_SLOT":
+            self.type = lief.ELF.RELOCATION_ARM.JUMP_SLOT
         else:
             raise Exception("Unknown rel type: '%s'" % (stype))
 
@@ -80,18 +82,38 @@ class Relocation:
             self.symbol = symbol_objects[symbol_index]
             self.has_symbol = True
         else:
+            self.symbol = None
             self.has_symbol = False
 
         try:
             symsec = elf.get_section(s["st_shndx"])
             self.section = Section(symsec)
-            self.name = self.section
+            self.name = self.section.name
         except:
             self.section = Section(section)
-            self.name = self.section
+            self.name = self.section.name
+
+        self.debug = "debug_" in self.section.name
 
         self.value = s["st_value"]
         self.address = s["st_value"]
+
+    def __str__(self) -> str:
+        if self.has_symbol:
+            return "Relocation<%s type=%s address=0x%x value=0x%x offset=0x%x>" % (
+                self.symbol.name,
+                relocation_type_name(self.type),
+                self.address,
+                self.value,
+                self.offset,
+            )
+        return "Relocation<%s type=%s address=0x%x value=0x%x offset=0x%x>" % (
+            self.name,
+            relocation_type_name(self.type),
+            self.address,
+            self.value,
+            self.offset,
+        )
 
 
 # http://stackoverflow.com/a/4999321
