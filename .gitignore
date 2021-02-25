@@ -3,3 +3,4 @@ build
 jlink.log
 dependencies.cmake
 __pycache__
+.ccls-cache/
