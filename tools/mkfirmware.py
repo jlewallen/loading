@@ -22,7 +22,7 @@ from collections import defaultdict
 
 
 class FkbWriter:
-    def __init__(self, elf_analyzer, fkb_path: str, increase_size_by):
+    def __init__(self, elf_analyzer, fkb_path, increase_size_by):
         self.elf = elf_analyzer
         self.fkb_path: str = fkb_path
         self.increase_size_by = increase_size_by
@@ -353,7 +353,10 @@ class ElfAnalyzer:
 
         by_section_name_index = defaultdict(list)
         for r in self.binary.relocations:
-            by_section_name_index[r.section.name_idx].append(r)
+            try:
+                by_section_name_index[r.section.name_idx].append(r)
+            except:
+                logging.info("No section for relocation! %s" % (r,))
 
         logging.info("Done %f", time.time() - started)
 
