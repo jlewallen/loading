@@ -148,7 +148,11 @@ class FkbHeader:
 
         got = ea.got()
         if got:
-            self.fields[self.GOT_OFFSET_FIELD] = got.virtual_address - 0x20000000
+            self.fields[self.GOT_OFFSET_FIELD] = (
+                got.virtual_address - 0x20000000
+                if got.virtual_address > 0x20000000
+                else got.virtual_address
+            )
         else:
             self.fields[self.GOT_OFFSET_FIELD] = 0x0
 
