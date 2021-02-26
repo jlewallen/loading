@@ -1,11 +1,11 @@
-import lief
+import lief  # type: ignore
 import logging
 
-from elftools.elf.elffile import ELFFile
-from elftools.elf.relocation import RelocationSection
-from elftools.elf.sections import SymbolTableSection
-from elftools.elf.relocation import RelocationSection
-from elftools.elf.descriptions import describe_reloc_type
+from elftools.elf.elffile import ELFFile  # type: ignore
+from elftools.elf.relocation import RelocationSection  # type: ignore
+from elftools.elf.sections import SymbolTableSection  # type: ignore
+from elftools.elf.relocation import RelocationSection  # type: ignore
+from elftools.elf.descriptions import describe_reloc_type  # type: ignore
 
 
 class Symbol:

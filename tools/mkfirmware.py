@@ -11,12 +11,12 @@ import subprocess
 import argparse
 import hashlib
 import logging
-import lief
+import lief  # type: ignore
 import hashlib
 import platform
 import threading
 import utilities
-import pyblake2
+import pyblake2  # type: ignore
 
 from collections import defaultdict
 
