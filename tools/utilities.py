@@ -72,6 +72,8 @@ class Relocation:
             self.type = lief.ELF.RELOCATION_ARM.REL32
         elif stype == "R_ARM_JUMP_SLOT":
             self.type = lief.ELF.RELOCATION_ARM.JUMP_SLOT
+        elif stype == "R_ARM_GLOB_DAT":
+            self.type = lief.ELF.RELOCATION_ARM.GLOB_DAT
         else:
             raise Exception("Unknown rel type: '%s'" % (stype))
 
