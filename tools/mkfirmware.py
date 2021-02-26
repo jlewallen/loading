@@ -692,11 +692,6 @@ def make_binary(elf_path, bin_path):
         f.write(b2.digest())
 
 
-class MkModuleArgs:
-    def __init__(self):
-        self.no_debug = False
-
-
 def main():
     configure_logging()
 
@@ -713,10 +708,31 @@ def main():
         action="store_true",
         help="Don't show debug data (default: false)",
     )
-    parser.add_argument("--elf", dest="elf_path", default=None, help="")
-    parser.add_argument("--fkb", dest="fkb_path", default=None, help="")
-    parser.add_argument("--bin", dest="bin_path", default=None, help="")
-    parser.add_argument("--name", dest="name", default=None, help="")
+    parser.add_argument(
+        "--elf",
+        dest="elf_path",
+        default=None,
+        help="Path to the compiler generated ELF file.",
+    )
+    parser.add_argument(
+        "--fkb", dest="fkb_path", default=None, help="Path to the fkb ELF to generate."
+    )
+    parser.add_argument(
+        "--bin",
+        dest="bin_path",
+        default=None,
+        help="Path to the raw binary to generate. ",
+    )
+    parser.add_argument(
+        "--name", dest="name", default=None, help="Override firmware name."
+    )
+    parser.add_argument(
+        "--dynamic",
+        dest="dynamic",
+        default=False,
+        action="store_true",
+        help="Enable dynamic module mode. Relocations, the whole shebang.",
+    )
     args, nargs = parser.parse_known_args()
 
     if args.elf_path:
