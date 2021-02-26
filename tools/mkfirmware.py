@@ -84,18 +84,20 @@ class FkbHeader:
         binary_size_before = ea.get_binary_size()
 
         extra_padding = self.aligned(len(table), table_alignment) - len(table)
-        section = lief.ELF.Section()
-        section.name = ".data.fkdyn"
-        section.type = lief.ELF.SECTION_TYPES.PROGBITS
+        section = ea.fkdyn()
+        if not section:
+            return
+
         section.content = table + bytearray([0] * extra_padding)
-        section.add(lief.ELF.SECTION_FLAGS.WRITE)
-        section.add(lief.ELF.SECTION_FLAGS.ALLOC)
-        section.alignment = 4
-        section = ea.binary.add(section, True)
+
         if False:
-            section.virtual_address = binary_size_before + 0x8000
-        if True:
+            section.alignment = 4
+            section.type = lief.ELF.SECTION_TYPES.PROGBITS
+            section.add(lief.ELF.SECTION_FLAGS.WRITE)
+            section.add(lief.ELF.SECTION_FLAGS.ALLOC)
+            section = ea.binary.add(section, True)
             section.virtual_address = binary_size_before
+
         logging.info(
             "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
             % (len(table), section.virtual_address, len(section.content), extra_padding)
@@ -124,7 +126,7 @@ class FkbHeader:
         for r in ea.relocations:
             self.relocations += struct.pack("<II", indices[r[0]], r[1])
 
-        table_alignment = 2048
+        table_alignment = 4096
         self.table_size = self.aligned(
             len(self.symbols) + len(self.relocations), table_alignment
         )
@@ -135,9 +137,7 @@ class FkbHeader:
         )
 
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
-        self.fields[self.BINARY_SIZE_FIELD] = (
-            ea.get_binary_size() + self.table_size + increase_size_by
-        )
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
@@ -217,10 +217,17 @@ class ElfAnalyzer:
     def __init__(self, elf_path: str):
         self.elf_path: str = elf_path
         self.raw_cache = {}
+        self.binary = None
 
     def fkbheader(self):
         try:
             return self.binary.get_section(".data.fkb.header")
+        except:
+            return None
+
+    def fkdyn(self):
+        try:
+            return self.binary.get_section(".fkdyn")
         except:
             return None
 
@@ -251,14 +258,6 @@ class ElfAnalyzer:
     def timestamp(self) -> int:
         return int(os.path.getmtime(self.elf_path))
 
-    def get_data_size(self) -> int:
-        size = 0
-        for section in self.binary.sections:
-            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
-                size += section.size
-
-        return size - self.get_got_size() - self.get_bss_size()
-
     def get_got_size(self) -> int:
         if self.got() is None:
             return 0
@@ -269,10 +268,19 @@ class ElfAnalyzer:
             return 0
         return self.bss().size
 
-    def get_binary_size(self) -> int:
+    def get_data_size(self) -> int:
         size = 0
         for section in self.binary.sections:
-            if lief.ELF.SECTION_FLAGS.ALLOC in section.flags_list:
+            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
+                size += section.size
+
+        return size - self.get_got_size() - self.get_bss_size()
+
+    def get_binary_size(self) -> int:
+        size = 0
+        for section in self.get_binary_sections():
+            if section:
+                print(section.size)
                 size += section.size
 
         return size
@@ -322,45 +330,13 @@ class ElfAnalyzer:
                 return section
         pass
 
-    def investigate_code_relocation(self, r):
-        pass
-
-    def investigate_data_relocation(self, r):
-        if r.offset >= 0x20000000:
-            logging.info("skipping relocation (r.offset = 0x%x)" % (r.offset))
-            return
-        section = self.get_section_by_address(r.offset)
-        if section:
-            section_raw = self.raw_section_data(section)
-        cs = self.code()
-        assert cs
-        ds = self.data()
-        code_raw = self.raw_section_data(cs)
-        data_raw = self.raw_section_data(ds) if ds else None
-        try:
-            if r.offset - cs.virtual_address < len(code_raw):
-                offset = struct.unpack_from(
-                    "<I", code_raw, r.offset - cs.virtual_address
-                )[0]
-            else:
-                pass
-                # print(r.section.name, len(code_raw))
-                # print(cs.virtual_address, r.offset - cs.virtual_address)
-        except Exception as e:
-            pass
-            # print("FOUND", section)
-            # print(cs.virtual_address, r.offset - cs.virtual_address)
-            # print(r.section.name, len(code_raw))
-
     def get_relocations_in_binary(self):
         started = time.time()
 
         by_section_name_index = defaultdict(list)
         for r in self.binary.relocations:
-            try:
+            if r.has_section:
                 by_section_name_index[r.section.name_idx].append(r)
-            except:
-                logging.info("No section for relocation! %s" % (r,))
 
         logging.info("Done %f", time.time() - started)
 
@@ -373,6 +349,10 @@ class ElfAnalyzer:
                 relocations += by_section_name_index[s.name_idx]
 
         logging.info("Done %f", time.time() - started)
+
+        for r in self.binary.relocations:
+            if r.has_symbol:
+                relocations.append(r)
 
         return relocations
 
@@ -520,15 +500,27 @@ class ElfAnalyzer:
                 self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
                 # display = True
 
-            if r.type == lief.ELF.RELOCATION_ARM.ABS32 and r.has_symbol:
+            if (
+                r.type == lief.ELF.RELOCATION_ARM.ABS32
+                or r.type == lief.ELF.RELOCATION_ARM.GLOB_DAT
+            ) and r.has_symbol:
                 # S (when used on its own) is the address of the symbol.
                 # A is the addend for the relocation
                 # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
                 # (S + A) | T
-                fixed = r.address - r.section.virtual_address
-                raw = self.raw_section_data(r.section)
-                rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
+                if r.has_section:
+                    fixed = r.address - r.section.virtual_address
+                    raw = self.raw_section_data(r.section)
+                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
+                    self.add_relocation(
+                        r.symbol, r.symbol.value, got_origin, rel_offset
+                    )
+                else:
+                    logging.info(
+                        "Reloc: %s %s 0x%x 0x%x 0x%x %x"
+                        % (r, r.symbol.name, r.size, r.address, got_origin, r.addend)
+                    )
+                    self.add_relocation(r.symbol, r.symbol.value, got_origin, 0)
                 # display = True
 
             if display:
@@ -645,7 +637,8 @@ class ElfAnalyzer:
 
     def add_relocation(self, symbol, address, got_origin, offset):
         rel = got_origin + offset
-        if rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
+        if False and rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
+            logging.info("Skip: %s" % [symbol.name, got_origin, offset, rel])
             return
 
         s = self.add_symbol(symbol, address)
@@ -660,6 +653,16 @@ class ElfAnalyzer:
         self.find_relocations()
         logging.info("Done, %s elapsed", time.time() - started)
 
+    def get_binary_sections(self):
+        return [
+            self.fkbheader(),
+            self.code(),
+            self.data(),
+            self.bss(),
+            self.got(),
+            self.fkdyn(),
+        ]
+
 
 def configure_logging():
     if False:
@@ -669,19 +672,44 @@ def configure_logging():
     logging.basicConfig(format="%(asctime)-15s %(message)s", level=logging.INFO)
 
 
-def make_binary(elf_path, bin_path):
-    command = ["arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path]
-    print("Exporting '%s' to '%s'" % (elf_path, bin_path))
-    print(" ".join(command))
-    subprocess.run(command, check=True)
+def get_bin_from_elf(elf_path):
+    ea = ElfAnalyzer(elf_path)
+    ea.analyse()
 
-    print("Calculating hash of '%s'" % (bin_path))
+    data = bytearray()
+
+    for s in ea.get_binary_sections():
+        print(s)
+        if s:
+            print(len(s.content))
+            data += bytearray(s.content)
+
+    return data
+
+
+def make_binary(elf_path, bin_path):
     b2 = pyblake2.blake2b(digest_size=32)
-    with open(bin_path, "rb") as f:
-        while True:
-            data = f.read(65536)
-            if not data:
-                break
+
+    if False:
+        command = ["arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path]
+        print("Exporting '%s' to '%s'" % (elf_path, bin_path))
+        print(" ".join(command))
+        subprocess.run(command, check=True)
+
+        print("Calculating hash of '%s'" % (bin_path))
+        b2 = pyblake2.blake2b(digest_size=32)
+        with open(bin_path, "rb") as f:
+            while True:
+                data = f.read(65536)
+                if not data:
+                    break
+                b2.update(data)
+            print(b2.hexdigest())
+    else:
+        data = get_bin_from_elf(elf_path)
+        b2.update(data)
+        with open(bin_path, "wb") as f:
+            f.write(data)
             b2.update(data)
         print(b2.hexdigest())
 
@@ -747,6 +775,7 @@ def main():
         if args.fkb_path:
             fw = FkbWriter(ea, args.fkb_path, increase_size_by)
             fw.process(args.name)
+
     if args.bin_path:
         if args.fkb_path:
             make_binary(args.fkb_path, args.bin_path)
