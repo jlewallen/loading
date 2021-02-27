@@ -21,15 +21,32 @@ import pyblake2  # type: ignore
 from collections import defaultdict
 
 
+class TableRelocation:
+    def __init__(self):
+        super().__init__()
+
+
+class TableSymbol:
+    def __init__(
+        self, name: str, size: int, got_offset: int, relocs: List[TableRelocation]
+    ):
+        super().__init__()
+        self.name: str = name
+        self.size: int = size
+        self.got_offset: int = got_offset
+        self.relocs: List[TableRelocation] = []
+
+
 class ElfAnalyzer:
     def __init__(self, dynamic: bool, elf_path: str, increase_size_by: int):
+        super().__init__()
         self.dynamic: bool = dynamic
         self.elf_path: str = elf_path
         self.increase_size_by: int = increase_size_by
         self.raw_cache: Dict[str, Any] = {}
         self.binary: Optional[lief.ELF.Binary] = None
-        self.symbols = []
-        self.relocations = []
+        self.symbols: Dict[TableSymbol, TableSymbol] = {}
+        self.relocations: List[TableRelocation] = []
 
     def timestamp(self) -> int:
         return int(os.path.getmtime(self.elf_path))
@@ -48,12 +65,9 @@ class ElfAnalyzer:
         except:
             return None
 
-    def code(self) -> Optional[lief.ELF.Section]:
+    def code(self) -> lief.ELF.Section:
         assert self.binary
-        try:
-            return self.binary.get_section(".text")
-        except:
-            return None
+        return self.binary.get_section(".text")
 
     def data(self) -> Optional[lief.ELF.Section]:
         assert self.binary
@@ -197,10 +211,6 @@ class ElfAnalyzer:
         return 0
 
     def find_relocations(self):
-        self.symbols = {}
-        self.relocations = []
-        self.verbose = False
-
         skipping = self.get_sections_to_skip()
         symbols = utilities.RejectingDict()
         nsections = len(self.binary.sections)
@@ -243,68 +253,21 @@ class ElfAnalyzer:
             rel_offset = 0
             fixed = None
 
-            # UNUSED
-            if False and r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
-                # A is the addend for the relocation
-                # GOT_ORG is the addressing origin of the Global Offset
-                #  Table (the indirection table for imported data
-                #  addresses). This value must always be word-aligned. See
-                #  4.6.1.8, Proxy generating relocations.
-                # GOT(S) is the address of the GOT entry for the symbol
-                # GOT(S) + A -GOT_ORG
-                fixed = r.address - r.section.virtual_address
-                raw = self.raw_section_data(r.section)
-                rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                # NOTE This should be the same for all relocations for this symbol!
-                self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
-
-            if (
-                r.type == lief.ELF.RELOCATION_ARM.ABS32
-                or r.type == lief.ELF.RELOCATION_ARM.GLOB_DAT
-            ) and r.has_symbol:
-                # S (when used on its own) is the address of the symbol.
-                # A is the addend for the relocation
-                # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
-                # (S + A) | T
-                # UNUSED
-                if False and r.has_section:
-                    fixed = r.address - r.section.virtual_address
-                    raw = self.raw_section_data(r.section)
-                    rel_offset = struct.unpack_from("<I", raw, fixed)[0]
-                    self.add_relocation(
-                        r.symbol, r.symbol.value, got_origin, rel_offset
-                    )
-                else:
-                    logging.info(
-                        "Relocation: sym=%s val=%s size=0x%x addr=0x%x offset=0x%x"
-                        % (
-                            r.symbol.name,
-                            r.symbol.value,
-                            r.size,
-                            r.address,
-                            r.address - got_origin,
-                        )
-                    )
-                    self.add_relocation(
-                        r.symbol, r.address, got_origin, r.address - got_origin
-                    )
+            if r.type == lief.ELF.RELOCATION_ARM.GLOB_DAT and r.has_symbol:
+                got_offset = r.address - got_origin
+                logging.info(
+                    "Relocation: sym=%s val=%s size=0x%x addr=0x%x offset=0x%x"
+                    % (r.symbol.name, r.symbol.value, r.size, r.address, got_offset)
+                )
+                self.add_symbol(r.symbol, r.address, got_offset)
 
         logging.info("Relocations Done")
 
-    def add_symbol(self, symbol, address):
+    def add_symbol(self, symbol: lief.ELF.Symbol, address: int, offset: int):
         if not symbol in self.symbols:
-            type = 0
-            if symbol.type == lief.ELF.SYMBOL_TYPES.FUNC:
-                type = 1
-            self.symbols[symbol] = (type, symbol.size, address, [])
+            ts = TableSymbol(symbol.name, symbol.size, offset, [])
+            self.symbols[symbol] = ts
         return self.symbols[symbol]
-
-    def add_relocation(self, symbol, address, got_origin, offset):
-        s = self.add_symbol(symbol, address)
-
-        s[3].append(offset)
-
-        self.relocations.append([symbol, offset])
 
     def analyse(self):
         started = time.time()
@@ -460,6 +423,7 @@ class FkbWriter:
 
         self.populate_header_section(name)
 
+        assert self.ea.binary
         self.ea.binary.write(self.fkb_path)
 
     def generate_table(self):
@@ -469,21 +433,18 @@ class FkbWriter:
         # Address in the symbol table we write to the image seems totally wrong...
         indices = {}
         index = 0
-        for symbol in self.ea.symbols:
-            s = self.ea.symbols[symbol]
+        for lief_symbol, table_symbol in self.ea.symbols.items():
             try:
-                symbols += struct.pack("<I24s", s[2], bytes(symbol.name, "utf-8"))
-            except:
-                raise Exception(
-                    "Error packing symbol: %s %d %d %d"
-                    % (symbol.name, s[0], s[1], s[2])
+                symbols += struct.pack(
+                    "<I24s", table_symbol.got_offset, bytes(table_symbol.name, "utf-8")
                 )
+            except:
+                raise Exception("Error packing symbol: %s" % (table_symbol,))
 
-            indices[symbol] = index
+            indices[table_symbol] = index
             index += 1
 
-        for r in self.ea.relocations:
-            relocations += struct.pack("<II", indices[r[0]], r[1])
+        assert len(self.ea.relocations) == 0
 
         table_alignment = 4096
         self.table_size = utilities.aligned(
