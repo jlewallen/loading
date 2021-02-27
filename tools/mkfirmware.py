@@ -89,7 +89,7 @@ class ElfAnalyzer:
         return s.size
 
     def get_binary_size(self) -> int:
-        size = 0
+        size = self.increase_size_by
         for section in self.get_binary_sections():
             if section:
                 size += section.size
@@ -550,7 +550,7 @@ class FkbHeader:
             % (len(table), section.virtual_address, len(section.content), extra_padding)
         )
 
-    def populate(self, ea: "ElfAnalyzer", name: str, increase_size_by: int):
+    def populate(self, ea: "ElfAnalyzer", name: str):
         self.symbols = bytearray()
         self.relocations = bytearray()
 
@@ -663,15 +663,14 @@ class FkbHeader:
 
 
 class FkbWriter:
-    def __init__(self, elf_analyzer: ElfAnalyzer, fkb_path: str, increase_size_by: int):
+    def __init__(self, elf_analyzer: ElfAnalyzer, fkb_path: str):
         self.ea: ElfAnalyzer = elf_analyzer
         self.fkb_path: str = fkb_path
-        self.increase_size_by: int = increase_size_by
 
     def populate_header_section(self, section: lief.ELF.Section, name: str):
         header = FkbHeader(self.fkb_path)
         header.read(section.content)
-        header.populate(self.ea, name, self.increase_size_by)
+        header.populate(self.ea, name)
         section.content = header.write(self.ea)
 
     def generate(self, name: str):
@@ -757,7 +756,7 @@ def main():
             ea = ElfAnalyzer(args.dynamic, args.elf_path, increase_size_by)
             ea.analyse()
 
-            fw = FkbWriter(ea, args.fkb_path, increase_size_by)
+            fw = FkbWriter(ea, args.fkb_path)
             fw.generate(args.name)
 
             if args.bin_path:
