@@ -16,9 +16,6 @@ extern uint32_t __heap_top;
 extern uint32_t __data_start__;
 
 static uint8_t has_valid_signature(void *ptr);
-static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol);
-static fkb_symbol_t *get_first_symbol(fkb_header_t *header);
-static fkb_relocation_t *get_first_relocation(fkb_header_t *header);
 static uint32_t aligned_on(uint32_t value, uint32_t on);
 static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t *ptr, size_t size);
 
@@ -76,86 +73,6 @@ uint32_t fkb_try_launch(fkb_header_t *fkbh) {
     return 0;
 }
 
-typedef struct allocation_t {
-    uint32_t allocated;
-    void *ptr;
-} allocation_t;
-
-uint8_t get_symbol_address(fkb_header_t *header, fkb_symbol_t *symbol, allocation_t *alloc) {
-    uint8_t *top = (uint8_t *)&__heap_top;
-
-    alloc->ptr = NULL;
-    alloc->allocated = 0;
-
-    if (strcmp(symbol->name, "_SEGGER_RTT") == 0) {
-        alloc->ptr = (void *)&_SEGGER_RTT;
-        return 0;
-    }
-
-    if (strcmp(symbol->name, "fkb_launch_info") == 0) {
-        alloc->ptr = (void *)&fkb_launch_info;
-        return 0;
-    }
-
-    return 0;
-}
-
-uint8_t is_valid_pointer(uint32_t *p) {
-    return (uint32_t)p >= 0x20000000 && (uint32_t)p < 0x20000000 + 0x00040000;
-}
-
-uint32_t analyse_table(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header;
-    uint8_t *ptr = base + sizeof(fkb_header_t);
-
-    fkb_symbol_t *syms = get_first_symbol(header);
-    fkb_relocation_t *r = get_first_relocation(header);
-    uint8_t *end_of_binary = (uint8_t *)(r + header->number_relocations);
-
-    fkb_external_println("bl: [0x%08x] number-syms=%d number-rels=%d got=0x%x data=0x%x", base,
-                         header->number_symbols, header->number_relocations,
-                         header->firmware.got_offset, &__data_start__);
-    fkb_external_println("bl: [0x%08x] first-sym=0x%x first-relocation=0x%x end-of-binary=0x%x", base, syms, r, end_of_binary);
-
-    if (0) {
-        fkb_symbol_t *s = syms;
-        for (uint32_t i = 0; i < header->number_symbols; ++i) {
-            fkb_external_println("bl: [0x%08x] symbol #%6d addr=0x%8x size=0x%4x '%s'", base, i, s->address, /*s->size*/0, s->name);
-            s++;
-        }
-    }
-
-    for (uint32_t i = 0; i < header->number_relocations; ++i) {
-        fkb_symbol_t *sym = &syms[r->symbol];
-        uint32_t *rel = (uint32_t *)(((uint8_t *)&__cm_ram_origin) + r->offset + header->firmware.got_offset);
-        allocation_t alloc;
-
-        if (!is_valid_pointer(rel)) {
-            if (0) {
-                fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=%s allocated=0x%8x s.size=0x%4x s.addr=0x%8x of='%s'",
-                                     base, i, r->offset, "<invalid>", alloc.ptr, /*sym->size*/0, sym->address, sym->name);
-            }
-            r++;
-            continue;
-        }
-
-        get_symbol_address(header, sym, &alloc);
-
-        uint32_t old_value = *rel;
-
-        if (0) {
-            fkb_external_println("bl: [0x%08x] relocation #6%d r.offset=0x%8x rel=0x%8x allocated=0x%8x s.size=0x%4x s.addr=0x%8x old=0x%8x of='%s'",
-                                 base, i, r->offset, rel, alloc.ptr, /*sym->size*/0, sym->address, old_value, sym->name);
-        }
-
-        *rel = (uint32_t)sym->address;
-
-        r++;
-    }
-
-    return 0;
-}
-
 uint32_t fkb_find_and_launch(void *ptr) {
     fkb_header_t *selected = NULL;
 
@@ -181,8 +98,6 @@ uint32_t fkb_find_and_launch(void *ptr) {
         fkb_external_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
                              hex_hash, fkbh->firmware.timestamp);
 
-        analyse_table(fkbh);
-
         ptr += aligned_on(fkbh->firmware.binary_size, 0x1000);
     }
 
@@ -196,29 +111,6 @@ uint32_t fkb_find_and_launch(void *ptr) {
 static uint8_t has_valid_signature(void *ptr) {
     fkb_header_t *fkbh = (fkb_header_t *)ptr;
     return strcmp(fkbh->signature, "FKB") == 0;
-}
-
-
-static uint32_t sizeof_symbols(fkb_header_t *header) {
-    return sizeof(fkb_symbol_t) * header->number_symbols;
-}
-
-static uint32_t sizeof_relocations(fkb_header_t *header) {
-    return sizeof(fkb_relocation_t) * header->number_relocations;
-}
-
-static fkb_symbol_t *get_symbol_by_index(fkb_header_t *header, uint32_t symbol) {
-    uint8_t *base = (uint8_t *)header + header->firmware.tables_offset;
-    return (fkb_symbol_t *)(base + sizeof(fkb_symbol_t) * symbol);
-}
-
-static fkb_symbol_t *get_first_symbol(fkb_header_t *header) {
-    return get_symbol_by_index(header, 0);
-}
-
-static fkb_relocation_t *get_first_relocation(fkb_header_t *header) {
-    uint8_t *base = (uint8_t *)header + header->firmware.tables_offset + sizeof_symbols(header);
-    return (fkb_relocation_t *)base;
 }
 
 static uint32_t aligned_on(uint32_t value, uint32_t on) {
