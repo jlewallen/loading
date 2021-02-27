@@ -259,13 +259,13 @@ class ElfAnalyzer:
                     "Relocation: sym=%s val=%s size=0x%x addr=0x%x offset=0x%x"
                     % (r.symbol.name, r.symbol.value, r.size, r.address, got_offset)
                 )
-                self.add_symbol(r.symbol, r.address, got_offset)
+                self.add_symbol(r.symbol, int(r.size / 8), r.address, got_offset)
 
         logging.info("Relocations Done")
 
-    def add_symbol(self, symbol: lief.ELF.Symbol, address: int, offset: int):
+    def add_symbol(self, symbol: lief.ELF.Symbol, size: int, address: int, offset: int):
         if not symbol in self.symbols:
-            ts = TableSymbol(symbol.name, symbol.size, offset, [])
+            ts = TableSymbol(symbol.name, size, offset, [])
             self.symbols[symbol] = ts
         return self.symbols[symbol]
 
@@ -436,7 +436,10 @@ class FkbWriter:
         for lief_symbol, table_symbol in self.ea.symbols.items():
             try:
                 symbols += struct.pack(
-                    "<I24s", table_symbol.got_offset, bytes(table_symbol.name, "utf-8")
+                    "<24sII",
+                    bytes(table_symbol.name, "utf-8"),
+                    table_symbol.size,
+                    table_symbol.got_offset,
                 )
             except:
                 raise Exception("Error packing symbol: %s" % (table_symbol,))
