@@ -202,9 +202,7 @@ class ElfAnalyzer:
         self.verbose = False
 
         skipping = self.get_sections_to_skip()
-
         symbols = utilities.RejectingDict()
-
         nsections = len(self.binary.sections)
         elf_symbols = utilities.get_symbols_in_elf(self.elf_path)
 
@@ -238,78 +236,15 @@ class ElfAnalyzer:
 
         started = time.time()
 
-        if False:
-            relocations = utilities.get_relocations_in_elf(self.elf_path, elf_symbols)
-            if len(relocations) > 0:
-                for r in relocations:
-                    if r.type != lief.ELF.RELOCATION_ARM.GOT_BREL:
-                        continue
-                    if (
-                        symbols[r.symbol.index] == "local"
-                        or symbols[r.symbol.index] == "exported"
-                    ):
-                        values = (
-                            r.symbol.size,
-                            utilities.relocation_type_name(r.type),
-                            r.section.name,
-                            r.symbol.value,
-                            r.offset,
-                            r.section.name,
-                            r.section.virtual_address,
-                            r.symbol.name,
-                        )
-                        logging.info(
-                            "Local relocation: size(0x%4x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s"
-                            % values
-                        )
-                        self.investigate_code_relocation(r)
-                    elif symbols[r.symbol.index] == "external":
-                        values = (
-                            r.symbol.size,
-                            relocation_type_name(r.type),
-                            r.symbol.type,
-                            r.symbol.value,
-                            r.offset,
-                            r.section.name,
-                            r.section.virtual_address,
-                            r.symbol.name,
-                        )
-                        logging.info(
-                            "Foreign relocation: size(0x%4x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s"
-                            % values
-                        )
-                        self.investigate_code_relocation(r)
-
-                for r in relocations:
-                    if r.section.name in skipping:
-                        continue
-                    if r.type != lief.ELF.RELOCATION_ARM.ABS32:
-                        continue
-                    if not r.has_symbol:
-                        continue
-                    values = (
-                        r.symbol.size,
-                        utilities.relocation_type_name(r.type),
-                        r.symbol.type,
-                        r.symbol.value,
-                        r.offset,
-                        r.section.name,
-                        r.section.virtual_address,
-                        r.symbol.name,
-                    )
-                    logging.info(
-                        "DATA: size(0x%04x) (%s) TYPE=%24s VALUE=0x%8x offset=0x%8x section=(%10s, va=0x%8x) %s"
-                        % values
-                    )
-                    self.investigate_data_relocation(r)
-
         got_origin = self.got_origin()
+        logging.info("GOT Origin: 0x%x" % (got_origin,))
         for r in self.get_relocations_in_binary():
             display = False
             rel_offset = 0
             fixed = None
 
-            if r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
+            # UNUSED
+            if False and r.type == lief.ELF.RELOCATION_ARM.GOT_BREL:
                 # A is the addend for the relocation
                 # GOT_ORG is the addressing origin of the Global Offset
                 #  Table (the indirection table for imported data
@@ -322,7 +257,6 @@ class ElfAnalyzer:
                 rel_offset = struct.unpack_from("<I", raw, fixed)[0]
                 # NOTE This should be the same for all relocations for this symbol!
                 self.add_relocation(r.symbol, r.symbol.value, got_origin, rel_offset)
-                # display = True
 
             if (
                 r.type == lief.ELF.RELOCATION_ARM.ABS32
@@ -332,7 +266,8 @@ class ElfAnalyzer:
                 # A is the addend for the relocation
                 # T is 1 if the target symbol S has type STT_FUNC and the symbol addresses a Thumb instruction; it is 0 otherwise.
                 # (S + A) | T
-                if r.has_section:
+                # UNUSED
+                if False and r.has_section:
                     fixed = r.address - r.section.virtual_address
                     raw = self.raw_section_data(r.section)
                     rel_offset = struct.unpack_from("<I", raw, fixed)[0]
@@ -341,113 +276,18 @@ class ElfAnalyzer:
                     )
                 else:
                     logging.info(
-                        "Reloc: %s %s 0x%x 0x%x 0x%x %x"
-                        % (r, r.symbol.name, r.size, r.address, got_origin, r.addend)
+                        "Relocation: sym=%s val=%s size=0x%x addr=0x%x offset=0x%x"
+                        % (
+                            r.symbol.name,
+                            r.symbol.value,
+                            r.size,
+                            r.address,
+                            r.address - got_origin,
+                        )
                     )
-                    self.add_relocation(r.symbol, r.symbol.value, got_origin, 0)
-                # display = True
-
-            if display:
-                if fixed is None:
-                    fixed = "<none>"
-                else:
-                    fixed = "0x%x" % (fixed)
-
-                rel = self.got_origin() + rel_offset
-
-                values = (
-                    r.symbol.name,
-                    r.symbol.size,
-                    r.symbol.value,
-                    r.symbol.type,
-                    r.symbol.binding,
-                    r.address,
-                    r.size,
-                    r.addend,
-                    utilities.relocation_type_name(r.type),
-                    r.section.name,
-                    r.section.virtual_address,
-                    fixed,
-                    rel_offset,
-                    rel,
-                )
-                logging.info(
-                    "Relocation: %-50s s.size(0x%4x) s.value=0x%8x s.type=%-22s s.binding=%-26s r.address=0x%8x r.size=0x%4x r.addend=%s r.type=%-10s section=(%s, va=0x%8x) fixed=%10s rel_offset=0x%8x rel=0x%8x"
-                    % values
-                )
-
-            if self.verbose:
-                symbol = r.symbol
-                logging.info(
-                    (
-                        "addend",
-                        r.addend,
-                        "address",
-                        r.address,
-                        "has_section",
-                        r.has_section,
-                        "has_symbol",
-                        r.has_symbol,
-                        "info",
-                        r.info,
-                        "is_rel",
-                        r.is_rel,
-                        "is_rela",
-                        r.is_rela,
-                        "purpose",
-                        r.purpose,
-                        "section",
-                        r.section,
-                        "size",
-                        r.size,
-                        "type",
-                        r.type,
+                    self.add_relocation(
+                        r.symbol, r.address, got_origin, r.address - got_origin
                     )
-                )
-                logging.info(
-                    (
-                        "name",
-                        symbol.name,
-                        "binding",
-                        symbol.binding,
-                        "exported",
-                        symbol.exported,
-                        "other",
-                        symbol.other,
-                        "function",
-                        symbol.is_function,
-                        "static",
-                        symbol.is_static,
-                        "var",
-                        symbol.is_variable,
-                        "info",
-                        symbol.information,
-                        "shndx",
-                        symbol.shndx,
-                        "size",
-                        symbol.size,
-                        "type",
-                        symbol.type,
-                        "value",
-                        symbol.value,
-                    )
-                )
-
-        if False:
-            for r in self.binary.dynamic_symbols:
-                logging.info("ds: %s", r)
-
-            for r in self.binary.symbols:
-                logging.info("ss: %s", r)
-
-            for r in self.binary.dynamic_relocations:
-                logging.info("dr: %s", r)
-
-            for r in self.binary.object_relocations:
-                logging.info("or: %s", r)
-
-            for r in self.binary.pltgot_relocations:
-                logging.info("pg: %s", r)
 
         logging.info("Relocations Done")
 
@@ -460,11 +300,6 @@ class ElfAnalyzer:
         return self.symbols[symbol]
 
     def add_relocation(self, symbol, address, got_origin, offset):
-        rel = got_origin + offset
-        if False and rel < 0x20000000 or rel > 0x20000000 + 0x00040000:
-            logging.info("Skip: %s" % [symbol.name, got_origin, offset, rel])
-            return
-
         s = self.add_symbol(symbol, address)
 
         s[3].append(offset)
