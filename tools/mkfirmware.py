@@ -96,6 +96,12 @@ class ElfAnalyzer:
             return 0
         return g.size
 
+    def get_fkdyn_size(self) -> int:
+        g = self.fkdyn()
+        if g is None:
+            return 0
+        return g.size
+
     def get_bss_size(self) -> int:
         s = self.bss()
         if s is None:
@@ -334,7 +340,9 @@ class FkbHeader:
     def populate(self, ea: "ElfAnalyzer", name: str):
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
-        self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
+        self.fields[self.TABLES_OFFSET_FIELD] = (
+            ea.get_binary_size() - ea.get_fkdyn_size() - ea.increase_size_by
+        )
         self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
@@ -456,9 +464,7 @@ class FkbWriter:
 
         self.add_table_section(symbols + relocations, table_alignment)
 
-        logging.info(
-            "Table size: %d (%d)" % (len(symbols) + len(relocations), self.table_size)
-        )
+        logging.info("Table size: %d" % (self.table_size,))
 
     def add_table_section(self, table: bytes, table_alignment: int):
         section = self.ea.fkdyn()
