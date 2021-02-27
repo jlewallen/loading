@@ -1,5 +1,8 @@
-import lief  # type: ignore
+from typing import Any, Optional
+
 import logging
+import lief  # type: ignore
+import pyblake2  # type: ignore
 
 from elftools.elf.elffile import ELFFile  # type: ignore
 from elftools.elf.relocation import RelocationSection  # type: ignore
@@ -9,7 +12,7 @@ from elftools.elf.descriptions import describe_reloc_type  # type: ignore
 
 
 class Symbol:
-    def __init__(self, section, index, s):
+    def __init__(self, section: Any, index: int, s: Any):
         self.name = s.name
         sbind = s["st_info"]["bind"]
         if sbind == "STB_GLOBAL":
@@ -39,7 +42,7 @@ class Symbol:
         self.size = int(s["st_size"])
         self.shndx = s["st_shndx"]
         try:
-            self.shndx = int(sdata["section"])
+            self.shndx = int(s["section"])
             self.exported = s["section"] != "SHN_UNDEF"
         except:
             self.exported = False
@@ -47,13 +50,13 @@ class Symbol:
 
 
 class Section:
-    def __init__(self, s):
-        self.name = s.name
-        self.virtual_address = int(s["sh_addr"])
+    def __init__(self, s: Any):
+        self.name: str = s.name
+        self.virtual_address: int = int(s["sh_addr"])
 
 
 class Relocation:
-    def __init__(self, elf, section, symtable, symbol_objects, r):
+    def __init__(self, elf: Any, section: Any, symtable: Any, symbol_objects: Any, r):
         self.offset = int(r["r_offset"])
         stype = describe_reloc_type(r["r_info_type"], elf)
         if stype == "R_ARM_GOT_BREL":
@@ -161,3 +164,23 @@ def relocation_type_name(r):
         if isinstance(value, lief.ELF.RELOCATION_ARM) and value == r:
             return attr
     return "<unknown>"
+
+
+def append_hash(bin_path: str):
+    logging.info("Calculating hash of '%s'" % (bin_path))
+
+    b2 = pyblake2.blake2b(digest_size=32)
+    with open(bin_path, "rb") as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            b2.update(data)
+
+    with open(bin_path, "ab") as f:
+        f.write(b2.digest())
+
+    with open(bin_path + ".b2sum", "w") as s:
+        s.write(b2.hexdigest())
+
+    logging.info("Hash '%s'" % (b2.hexdigest(),))

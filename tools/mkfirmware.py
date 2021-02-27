@@ -21,279 +21,102 @@ import pyblake2  # type: ignore
 from collections import defaultdict
 
 
-class FkbWriter:
-    def __init__(self, elf_analyzer, fkb_path, increase_size_by):
-        self.elf = elf_analyzer
-        self.fkb_path: str = fkb_path
-        self.increase_size_by = increase_size_by
-
-    def process(self, name: str):
-        fkbh_section = self.elf.fkbheader()
-        if fkbh_section:
-            logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
-            self.populate_header(fkbh_section, name)
-        else:
-            logging.info("No specialized handling for binary.")
-
-        self.elf.binary.write(self.fkb_path)
-
-    def populate_header(self, section, name: str):
-        header = FkbHeader(self.fkb_path)
-        header.read(section.content)
-        header.populate(self.elf, name, self.increase_size_by)
-        section.content = header.write(self.elf)
-
-
-class FkbHeader:
-    SIGNATURE_FIELD = 0
-    VERSION_FIELD = 1
-    HEADER_SIZE_FIELD = 2
-    FLAGS_FIELD = 3
-    TIMESTAMP_FIELD = 4
-    BUILD_NUMBER_FIELD = 5
-    VERSION_FIELD = 6
-    BINARY_SIZE_FIELD = 7
-    TABLES_OFFSET_FIELD = 8
-    BINARY_DATA_FIELD = 9
-    BINARY_BSS_FIELD = 10
-    BINARY_GOT_FIELD = 11
-    VTOR_OFFSET_FIELD = 12
-    GOT_OFFSET_FIELD = 13
-    NAME_FIELD = 14
-    HASH_SIZE_FIELD = 15
-    HASH_FIELD = 16
-    NUMBER_SYMBOLS_FIELD = 17
-    NUMBER_RELOCATIONS_FIELD = 18
-
-    def __init__(self, fkb_path: str):
-        self.min_packspec = "<4sIIIII16sIIIIIII256sI128sII"
-        self.min_size = struct.calcsize(self.min_packspec)
-        self.fkb_path = fkb_path
-
-    def read(self, data):
-        self.actual_size = len(data)
-        self.extra = bytearray(data[self.min_size :])
-        self.fields = list(
-            struct.unpack(self.min_packspec, bytearray(data[: self.min_size]))
-        )
-
-    def has_invalid_name(self, value: str):
-        return len(value) == 0 or value[0] == "\0" or value[0] == 0
-
-    def add_table_section(self, ea, table, table_alignment):
-        binary_size_before = ea.get_binary_size()
-
-        extra_padding = self.aligned(len(table), table_alignment) - len(table)
-        section = ea.fkdyn()
-        if not section:
-            return
-
-        section.content = table + bytearray([0] * extra_padding)
-
-        if False:
-            section.alignment = 4
-            section.type = lief.ELF.SECTION_TYPES.PROGBITS
-            section.add(lief.ELF.SECTION_FLAGS.WRITE)
-            section.add(lief.ELF.SECTION_FLAGS.ALLOC)
-            section = ea.binary.add(section, True)
-            section.virtual_address = binary_size_before
-
-        logging.info(
-            "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
-            % (len(table), section.virtual_address, len(section.content), extra_padding)
-        )
-
-    def populate(self, ea, name: str, increase_size_by):
-        self.symbols = bytearray()
-        self.relocations = bytearray()
-
-        # Address in the symbol table we write to the image seems totally wrong...
-        indices = {}
-        index = 0
-        for symbol in ea.symbols:
-            s = ea.symbols[symbol]
-            try:
-                self.symbols += struct.pack("<I24s", s[2], bytes(symbol.name, "utf-8"))
-            except:
-                raise Exception(
-                    "Error packing symbol: %s %d %d %d"
-                    % (symbol.name, s[0], s[1], s[2])
-                )
-
-            indices[symbol] = index
-            index += 1
-
-        for r in ea.relocations:
-            self.relocations += struct.pack("<II", indices[r[0]], r[1])
-
-        table_alignment = 4096
-        self.table_size = self.aligned(
-            len(self.symbols) + len(self.relocations), table_alignment
-        )
-
-        logging.info(
-            "Table size: %d (%d)"
-            % (len(self.symbols) + len(self.relocations), self.table_size)
-        )
-
-        self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
-        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
-        self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
-        self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
-        self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
-        self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
-        self.fields[self.VTOR_OFFSET_FIELD] = 1024
-
-        self.add_table_section(ea, self.symbols + self.relocations, table_alignment)
-
-        got = ea.got()
-        if got:
-            self.fields[self.GOT_OFFSET_FIELD] = (
-                got.virtual_address - 0x20000000
-                if got.virtual_address > 0x20000000
-                else got.virtual_address
-            )
-        else:
-            self.fields[self.GOT_OFFSET_FIELD] = 0x0
-
-        fwhash = ea.calculate_hash()
-        self.fields[self.HASH_SIZE_FIELD] = len(fwhash)
-        self.fields[self.HASH_FIELD] = fwhash
-        if name:
-            self.fields[self.NAME_FIELD] = name
-        if self.has_invalid_name(self.fields[self.NAME_FIELD]):
-            self.fields[self.NAME_FIELD] = self.generate_name(ea)
-
-        if "BUILD_NUMBER" in os.environ:
-            self.fields[self.BUILD_NUMBER_FIELD] = int(os.environ["BUILD_NUMBER"])
-
-        self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
-        self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
-
-    def aligned(self, size, on):
-        if size % on != 0:
-            return size + (on - (size % on))
-        return size
-
-    def generate_name(self, ea):
-        name = os.path.basename(self.fkb_path)
-        when = datetime.datetime.utcfromtimestamp(ea.timestamp())
-        ft = when.strftime("%Y%m%d_%H%M%S")
-        return bytes(name + "_" + platform.node() + "_" + ft, "utf8")
-
-    def write(self, ea):
-        new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
-
-        logging.info("Code Size: %d" % (ea.code().size))
-        logging.info("Data Size: %d" % (ea.get_data_size()))
-        logging.info(" BSS Size: %d" % (ea.get_bss_size()))
-        logging.info(" GOT Size: %d" % (ea.get_got_size()))
-        logging.info(" Dyn size: %d" % (self.table_size))
-
-        logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
-        logging.info("Version: %s" % (self.fields[self.VERSION_FIELD]))
-        logging.info("Number: %s" % (self.fields[self.BUILD_NUMBER_FIELD]))
-        logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].hex()))
-        logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
-        logging.info("Binary size: %d bytes" % (self.fields[self.BINARY_SIZE_FIELD]))
-        logging.info("GOT: 0x%x" % (self.fields[self.GOT_OFFSET_FIELD]))
-        logging.info(
-            "Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra))
-        )
-        logging.info("Fields: %s" % (self.fields))
-        logging.info(
-            "Dynamic: syms=%d rels=%d"
-            % (
-                self.fields[self.NUMBER_SYMBOLS_FIELD],
-                self.fields[self.NUMBER_RELOCATIONS_FIELD],
-            )
-        )
-        logging.info("Dynamic: size=%d" % (self.table_size))
-
-        return new_header + self.extra
-
-
 class ElfAnalyzer:
-    def __init__(self, elf_path: str):
+    def __init__(self, dynamic: bool, elf_path: str, increase_size_by: int):
+        self.dynamic: bool = dynamic
         self.elf_path: str = elf_path
-        self.raw_cache = {}
-        self.binary = None
+        self.increase_size_by: int = increase_size_by
+        self.raw_cache: Dict[str, Any] = {}
+        self.binary: Optional[lief.ELF.Binary] = None
+        self.symbols = []
+        self.relocations = []
 
-    def fkbheader(self):
+    def timestamp(self) -> int:
+        return int(os.path.getmtime(self.elf_path))
+
+    def fkbheader(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".data.fkb.header")
         except:
             return None
 
-    def fkdyn(self):
+    def fkdyn(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".fkdyn")
         except:
             return None
 
-    def code(self):
+    def code(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".text")
         except:
             return None
 
-    def data(self):
+    def data(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".data")
         except:
             return None
 
-    def got(self):
+    def got(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".got")
         except:
             return None
 
-    def bss(self):
+    def bss(self) -> Optional[lief.ELF.Section]:
+        assert self.binary
         try:
             return self.binary.get_section(".bss")
         except:
             return None
 
-    def timestamp(self) -> int:
-        return int(os.path.getmtime(self.elf_path))
-
     def get_got_size(self) -> int:
-        if self.got() is None:
+        g = self.got()
+        if g is None:
             return 0
-        return self.got().size
+        return g.size
 
     def get_bss_size(self) -> int:
-        if self.bss() is None:
+        s = self.bss()
+        if s is None:
             return 0
-        return self.bss().size
-
-    def get_data_size(self) -> int:
-        size = 0
-        for section in self.binary.sections:
-            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
-                size += section.size
-
-        return size - self.get_got_size() - self.get_bss_size()
+        return s.size
 
     def get_binary_size(self) -> int:
         size = 0
         for section in self.get_binary_sections():
             if section:
-                print(section.size)
                 size += section.size
-
         return size
 
-    def calculate_hash(self):
+    def get_data_size(self) -> int:
+        assert self.binary
+        size = 0
+        for section in self.binary.sections:
+            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
+                size += section.size
+        return size - self.get_got_size() - self.get_bss_size()
+
+    def calculate_hash(self) -> bytes:
         algo = hashlib.sha1()
-        algo.update(bytearray(self.code().content))
-        if self.data():
-            algo.update(bytearray(self.data().content))
+        code = self.code()
+        if code:
+            algo.update(bytearray(code.content))
+        data = self.data()
+        if data:
+            algo.update(bytearray(data.content))
         return algo.digest()
 
     def get_code_address(self) -> int:
-        return self.code().virtual_address
+        s = self.code()
+        assert s
+        return s.virtual_address
 
     def raw_section_data(self, section):
         assert section
@@ -311,6 +134,7 @@ class ElfAnalyzer:
         return byte_data
 
     def get_section_by_address(self, address: int):
+        assert self.binary
         for section in self.binary.sections:
             if section.name in [".rel.data", ".rel.text"]:
                 continue
@@ -650,7 +474,8 @@ class ElfAnalyzer:
     def analyse(self):
         started = time.time()
         self.binary = lief.ELF.parse(self.elf_path)
-        self.find_relocations()
+        if False:
+            self.find_relocations()
         logging.info("Done, %s elapsed", time.time() - started)
 
     def get_binary_sections(self):
@@ -663,6 +488,211 @@ class ElfAnalyzer:
             self.fkdyn(),
         ]
 
+    def write_bin(self, bin_path: str):
+        with open(bin_path, "wb") as f:
+            data = bytearray()
+            for section in self.get_binary_sections():
+                if section:
+                    data += bytearray(section.content)
+            f.write(data)
+
+        utilities.append_hash(bin_path)
+
+
+class FkbHeader:
+    SIGNATURE_FIELD = 0
+    VERSION_FIELD = 1
+    HEADER_SIZE_FIELD = 2
+    FLAGS_FIELD = 3
+    TIMESTAMP_FIELD = 4
+    BUILD_NUMBER_FIELD = 5
+    VERSION_FIELD = 6
+    BINARY_SIZE_FIELD = 7
+    TABLES_OFFSET_FIELD = 8
+    BINARY_DATA_FIELD = 9
+    BINARY_BSS_FIELD = 10
+    BINARY_GOT_FIELD = 11
+    VTOR_OFFSET_FIELD = 12
+    GOT_OFFSET_FIELD = 13
+    NAME_FIELD = 14
+    HASH_SIZE_FIELD = 15
+    HASH_FIELD = 16
+    NUMBER_SYMBOLS_FIELD = 17
+    NUMBER_RELOCATIONS_FIELD = 18
+
+    def __init__(self, fkb_path: str):
+        self.min_packspec = "<4sIIIII16sIIIIIII256sI128sII"
+        self.min_size = struct.calcsize(self.min_packspec)
+        self.fkb_path = fkb_path
+
+    def read(self, data: bytes):
+        self.actual_size = len(data)
+        self.extra = bytearray(data[self.min_size :])
+        self.fields = list(
+            struct.unpack(self.min_packspec, bytearray(data[: self.min_size]))
+        )
+
+    def has_invalid_name(self, value: str) -> bool:
+        return len(value) == 0 or value[0] == "\0" or value[0] == 0
+
+    def add_table_section(self, ea: "ElfAnalyzer", table: bytes, table_alignment: int):
+        binary_size_before = ea.get_binary_size()
+
+        extra_padding = self.aligned(len(table), table_alignment) - len(table)
+        section = ea.fkdyn()
+        if not section:
+            return
+
+        section.content = table + bytearray([0] * extra_padding)
+
+        logging.info(
+            "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
+            % (len(table), section.virtual_address, len(section.content), extra_padding)
+        )
+
+    def populate(self, ea: "ElfAnalyzer", name: str, increase_size_by: int):
+        self.symbols = bytearray()
+        self.relocations = bytearray()
+
+        # Address in the symbol table we write to the image seems totally wrong...
+        indices = {}
+        index = 0
+        for symbol in ea.symbols:
+            s = ea.symbols[symbol]
+            try:
+                self.symbols += struct.pack("<I24s", s[2], bytes(symbol.name, "utf-8"))
+            except:
+                raise Exception(
+                    "Error packing symbol: %s %d %d %d"
+                    % (symbol.name, s[0], s[1], s[2])
+                )
+
+            indices[symbol] = index
+            index += 1
+
+        for r in ea.relocations:
+            self.relocations += struct.pack("<II", indices[r[0]], r[1])
+
+        table_alignment = 4096
+        self.table_size = self.aligned(
+            len(self.symbols) + len(self.relocations), table_alignment
+        )
+
+        logging.info(
+            "Table size: %d (%d)"
+            % (len(self.symbols) + len(self.relocations), self.table_size)
+        )
+
+        self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
+        self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
+        self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
+        self.fields[self.BINARY_DATA_FIELD] = ea.get_data_size()
+        self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
+        self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
+        self.fields[self.VTOR_OFFSET_FIELD] = 1024
+
+        self.add_table_section(ea, self.symbols + self.relocations, table_alignment)
+
+        got = ea.got()
+        if got:
+            self.fields[self.GOT_OFFSET_FIELD] = (
+                got.virtual_address - 0x20000000
+                if got.virtual_address > 0x20000000
+                else got.virtual_address
+            )
+        else:
+            self.fields[self.GOT_OFFSET_FIELD] = 0x0
+
+        fwhash = ea.calculate_hash()
+        self.fields[self.HASH_SIZE_FIELD] = len(fwhash)
+        self.fields[self.HASH_FIELD] = fwhash
+
+        if name:
+            self.fields[self.NAME_FIELD] = name
+
+        if self.has_invalid_name(self.fields[self.NAME_FIELD]):
+            self.fields[self.NAME_FIELD] = self.generate_name(ea)
+
+        if "BUILD_NUMBER" in os.environ:
+            self.fields[self.BUILD_NUMBER_FIELD] = int(os.environ["BUILD_NUMBER"])
+
+        self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
+        self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
+
+    def aligned(self, size: int, on: int) -> int:
+        if size % on != 0:
+            return size + (on - (size % on))
+        return size
+
+    def generate_name(self, ea: ElfAnalyzer):
+        name = os.path.basename(self.fkb_path)
+        when = datetime.datetime.utcfromtimestamp(ea.timestamp())
+        ft = when.strftime("%Y%m%d_%H%M%S")
+        return bytes(name + "_" + platform.node() + "_" + ft, "utf8")
+
+    def write(self, ea: "ElfAnalyzer"):
+        new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
+
+        logging.info("Code Size: %d" % (ea.code().size))
+        logging.info("Data Size: %d" % (ea.get_data_size()))
+        logging.info(" BSS Size: %d" % (ea.get_bss_size()))
+        logging.info(" GOT Size: %d" % (ea.get_got_size()))
+        logging.info(" Dyn size: %d" % (self.table_size))
+
+        logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
+        logging.info("Version: %s" % (self.fields[self.VERSION_FIELD]))
+        logging.info("Number: %s" % (self.fields[self.BUILD_NUMBER_FIELD]))
+        logging.info("Hash: %s" % (self.fields[self.HASH_FIELD].hex()))
+        logging.info("Time: %d" % (self.fields[self.TIMESTAMP_FIELD]))
+        logging.info("Binary size: %d bytes" % (self.fields[self.BINARY_SIZE_FIELD]))
+        logging.info("GOT: 0x%x" % (self.fields[self.GOT_OFFSET_FIELD]))
+        logging.info(
+            "Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra))
+        )
+        logging.info("Fields: %s" % (self.fields))
+        logging.info(
+            "Dynamic: syms=%d rels=%d"
+            % (
+                self.fields[self.NUMBER_SYMBOLS_FIELD],
+                self.fields[self.NUMBER_RELOCATIONS_FIELD],
+            )
+        )
+        logging.info("Dynamic: size=%d" % (self.table_size))
+
+        return new_header + self.extra
+
+
+class FkbWriter:
+    def __init__(self, elf_analyzer: ElfAnalyzer, fkb_path: str, increase_size_by: int):
+        self.ea: ElfAnalyzer = elf_analyzer
+        self.fkb_path: str = fkb_path
+        self.increase_size_by: int = increase_size_by
+
+    def populate_header_section(self, section: lief.ELF.Section, name: str):
+        header = FkbHeader(self.fkb_path)
+        header.read(section.content)
+        header.populate(self.ea, name, self.increase_size_by)
+        section.content = header.write(self.ea)
+
+    def generate(self, name: str):
+        fkbh_section = self.ea.fkbheader()
+        if fkbh_section:
+            logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
+            self.populate_header_section(fkbh_section, name)
+        else:
+            logging.info("No specialized handling for binary.")
+
+        self.ea.binary.write(self.fkb_path)
+
+
+def make_binary_from_elf(elf_path: str, bin_path: str):
+    command = ["arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path]
+    logging.info("Exporting '%s' to '%s'" % (elf_path, bin_path))
+    logging.info(" ".join(command))
+    subprocess.run(command, check=True)
+
+    utilities.append_hash(bin_path)
+
 
 def configure_logging():
     if False:
@@ -670,54 +700,6 @@ def configure_logging():
         lief.Logger.set_level(lief.LOGGING_LEVEL.TRACE)
         lief.Logger.set_verbose_level(10)
     logging.basicConfig(format="%(asctime)-15s %(message)s", level=logging.INFO)
-
-
-def get_bin_from_elf(elf_path):
-    ea = ElfAnalyzer(elf_path)
-    ea.analyse()
-
-    data = bytearray()
-
-    for s in ea.get_binary_sections():
-        print(s)
-        if s:
-            print(len(s.content))
-            data += bytearray(s.content)
-
-    return data
-
-
-def make_binary(elf_path, bin_path):
-    b2 = pyblake2.blake2b(digest_size=32)
-
-    if False:
-        command = ["arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path]
-        print("Exporting '%s' to '%s'" % (elf_path, bin_path))
-        print(" ".join(command))
-        subprocess.run(command, check=True)
-
-        print("Calculating hash of '%s'" % (bin_path))
-        b2 = pyblake2.blake2b(digest_size=32)
-        with open(bin_path, "rb") as f:
-            while True:
-                data = f.read(65536)
-                if not data:
-                    break
-                b2.update(data)
-            print(b2.hexdigest())
-    else:
-        data = get_bin_from_elf(elf_path)
-        b2.update(data)
-        with open(bin_path, "wb") as f:
-            f.write(data)
-            b2.update(data)
-        print(b2.hexdigest())
-
-    with open(bin_path + ".b2sum", "w") as f:
-        f.write(b2.hexdigest())
-
-    with open(bin_path, "ab") as f:
-        f.write(b2.digest())
 
 
 def main():
@@ -761,26 +743,28 @@ def main():
         action="store_true",
         help="Enable dynamic module mode. Relocations, the whole shebang.",
     )
+
     args, nargs = parser.parse_known_args()
 
     if args.elf_path:
         logging.info("Processing %s...", args.elf_path)
 
-        increase_size_by = 0
-        if args.bin_path:
-            increase_size_by = 32
+        ea: Optional[ElfAnalyzer] = None
 
-        ea = ElfAnalyzer(args.elf_path)
-        ea.analyse()
         if args.fkb_path:
+            increase_size_by = 32 if args.bin_path else 0
+
+            ea = ElfAnalyzer(args.dynamic, args.elf_path, increase_size_by)
+            ea.analyse()
+
             fw = FkbWriter(ea, args.fkb_path, increase_size_by)
-            fw.process(args.name)
+            fw.generate(args.name)
 
-    if args.bin_path:
-        if args.fkb_path:
-            make_binary(args.fkb_path, args.bin_path)
-        elif args.elf_path:
-            make_binary(args.elf_path, args.bin_path)
+            if args.bin_path:
+                ea.write_bin(args.bin_path)
+        else:
+            if args.bin_path:
+                make_binary_from_elf(args.elf_path, args.bin_path)
 
 
 if __name__ == "__main__":
