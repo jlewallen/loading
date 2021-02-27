@@ -474,7 +474,7 @@ class ElfAnalyzer:
     def analyse(self):
         started = time.time()
         self.binary = lief.ELF.parse(self.elf_path)
-        if False:
+        if self.dynamic:
             self.find_relocations()
         logging.info("Done, %s elapsed", time.time() - started)
 
@@ -520,12 +520,10 @@ class FkbHeader:
     NUMBER_SYMBOLS_FIELD = 17
     NUMBER_RELOCATIONS_FIELD = 18
 
-    def __init__(self, fkb_path: str):
-        self.min_packspec = "<4sIIIII16sIIIIIII256sI128sII"
-        self.min_size = struct.calcsize(self.min_packspec)
-        self.fkb_path = fkb_path
-
-    def read(self, data: bytes):
+    def __init__(self, fkb_path: str, data: bytes):
+        self.min_packspec: str = "<4sIIIII16sIIIIIII256sI128sII"
+        self.min_size: int = struct.calcsize(self.min_packspec)
+        self.fkb_path: str = fkb_path
         self.actual_size = len(data)
         self.extra = bytearray(data[self.min_size :])
         self.fields = list(
@@ -535,54 +533,7 @@ class FkbHeader:
     def has_invalid_name(self, value: str) -> bool:
         return len(value) == 0 or value[0] == "\0" or value[0] == 0
 
-    def add_table_section(self, ea: "ElfAnalyzer", table: bytes, table_alignment: int):
-        binary_size_before = ea.get_binary_size()
-
-        extra_padding = self.aligned(len(table), table_alignment) - len(table)
-        section = ea.fkdyn()
-        if not section:
-            return
-
-        section.content = table + bytearray([0] * extra_padding)
-
-        logging.info(
-            "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
-            % (len(table), section.virtual_address, len(section.content), extra_padding)
-        )
-
     def populate(self, ea: "ElfAnalyzer", name: str):
-        self.symbols = bytearray()
-        self.relocations = bytearray()
-
-        # Address in the symbol table we write to the image seems totally wrong...
-        indices = {}
-        index = 0
-        for symbol in ea.symbols:
-            s = ea.symbols[symbol]
-            try:
-                self.symbols += struct.pack("<I24s", s[2], bytes(symbol.name, "utf-8"))
-            except:
-                raise Exception(
-                    "Error packing symbol: %s %d %d %d"
-                    % (symbol.name, s[0], s[1], s[2])
-                )
-
-            indices[symbol] = index
-            index += 1
-
-        for r in ea.relocations:
-            self.relocations += struct.pack("<II", indices[r[0]], r[1])
-
-        table_alignment = 4096
-        self.table_size = self.aligned(
-            len(self.symbols) + len(self.relocations), table_alignment
-        )
-
-        logging.info(
-            "Table size: %d (%d)"
-            % (len(self.symbols) + len(self.relocations), self.table_size)
-        )
-
         self.fields[self.TIMESTAMP_FIELD] = ea.timestamp()
         self.fields[self.BINARY_SIZE_FIELD] = ea.get_binary_size()
         self.fields[self.TABLES_OFFSET_FIELD] = ea.get_binary_size()
@@ -590,8 +541,6 @@ class FkbHeader:
         self.fields[self.BINARY_BSS_FIELD] = ea.get_bss_size()
         self.fields[self.BINARY_GOT_FIELD] = ea.get_got_size()
         self.fields[self.VTOR_OFFSET_FIELD] = 1024
-
-        self.add_table_section(ea, self.symbols + self.relocations, table_alignment)
 
         got = ea.got()
         if got:
@@ -619,25 +568,14 @@ class FkbHeader:
         self.fields[self.NUMBER_SYMBOLS_FIELD] = len(ea.symbols)
         self.fields[self.NUMBER_RELOCATIONS_FIELD] = len(ea.relocations)
 
-    def aligned(self, size: int, on: int) -> int:
-        if size % on != 0:
-            return size + (on - (size % on))
-        return size
-
     def generate_name(self, ea: ElfAnalyzer):
         name = os.path.basename(self.fkb_path)
         when = datetime.datetime.utcfromtimestamp(ea.timestamp())
         ft = when.strftime("%Y%m%d_%H%M%S")
         return bytes(name + "_" + platform.node() + "_" + ft, "utf8")
 
-    def write(self, ea: "ElfAnalyzer"):
+    def to_bytes(self):
         new_header = bytearray(bytes(struct.pack(self.min_packspec, *self.fields)))
-
-        logging.info("Code Size: %d" % (ea.code().size))
-        logging.info("Data Size: %d" % (ea.get_data_size()))
-        logging.info(" BSS Size: %d" % (ea.get_bss_size()))
-        logging.info(" GOT Size: %d" % (ea.get_got_size()))
-        logging.info(" Dyn size: %d" % (self.table_size))
 
         logging.info("Name: %s" % (self.fields[self.NAME_FIELD]))
         logging.info("Version: %s" % (self.fields[self.VERSION_FIELD]))
@@ -649,7 +587,6 @@ class FkbHeader:
         logging.info(
             "Header: %d bytes (%d of extra)" % (len(new_header), len(self.extra))
         )
-        logging.info("Fields: %s" % (self.fields))
         logging.info(
             "Dynamic: syms=%d rels=%d"
             % (
@@ -657,7 +594,6 @@ class FkbHeader:
                 self.fields[self.NUMBER_RELOCATIONS_FIELD],
             )
         )
-        logging.info("Dynamic: size=%d" % (self.table_size))
 
         return new_header + self.extra
 
@@ -667,21 +603,76 @@ class FkbWriter:
         self.ea: ElfAnalyzer = elf_analyzer
         self.fkb_path: str = fkb_path
 
-    def populate_header_section(self, section: lief.ELF.Section, name: str):
-        header = FkbHeader(self.fkb_path)
-        header.read(section.content)
+    def populate_header_section(self, name: str):
+        section = self.ea.fkbheader()
+        if section is None:
+            logging.info("No specialized handling for binary.")
+            return
+        logging.info("Found FKB section: %s bytes" % (section.size))
+        header = FkbHeader(self.fkb_path, section.content)
         header.populate(self.ea, name)
-        section.content = header.write(self.ea)
+        section.content = header.to_bytes()
 
     def generate(self, name: str):
-        fkbh_section = self.ea.fkbheader()
-        if fkbh_section:
-            logging.info("Found FKB section: %s bytes" % (fkbh_section.size))
-            self.populate_header_section(fkbh_section, name)
-        else:
-            logging.info("No specialized handling for binary.")
+        logging.info("Code Size: %d" % (self.ea.code().size))
+        logging.info("Data Size: %d" % (self.ea.get_data_size()))
+        logging.info(" BSS Size: %d" % (self.ea.get_bss_size()))
+        logging.info(" GOT Size: %d" % (self.ea.get_got_size()))
+        if False:
+            logging.info(" Dyn size: %d" % (self.table_size))
+
+        self.generate_table()
+
+        self.populate_header_section(name)
 
         self.ea.binary.write(self.fkb_path)
+
+    def generate_table(self):
+        symbols = bytearray()
+        relocations = bytearray()
+
+        # Address in the symbol table we write to the image seems totally wrong...
+        indices = {}
+        index = 0
+        for symbol in self.ea.symbols:
+            s = self.ea.symbols[symbol]
+            try:
+                symbols += struct.pack("<I24s", s[2], bytes(symbol.name, "utf-8"))
+            except:
+                raise Exception(
+                    "Error packing symbol: %s %d %d %d"
+                    % (symbol.name, s[0], s[1], s[2])
+                )
+
+            indices[symbol] = index
+            index += 1
+
+        for r in self.ea.relocations:
+            relocations += struct.pack("<II", indices[r[0]], r[1])
+
+        table_alignment = 4096
+        self.table_size = utilities.aligned(
+            len(symbols) + len(relocations), table_alignment
+        )
+
+        self.add_table_section(symbols + relocations, table_alignment)
+
+        logging.info(
+            "Table size: %d (%d)" % (len(symbols) + len(relocations), self.table_size)
+        )
+
+    def add_table_section(self, table: bytes, table_alignment: int):
+        section = self.ea.fkdyn()
+        if not section:
+            return
+
+        extra_padding = utilities.aligned(len(table), table_alignment) - len(table)
+        section.content = table + bytearray([0] * extra_padding)
+
+        logging.info(
+            "Dynamic table virtual address: 0x%x table=%d size=%d padding=%d"
+            % (len(table), section.virtual_address, len(section.content), extra_padding)
+        )
 
 
 def make_binary_from_elf(elf_path: str, bin_path: str):

@@ -184,3 +184,9 @@ def append_hash(bin_path: str):
         s.write(b2.hexdigest())
 
     logging.info("Hash '%s'" % (b2.hexdigest(),))
+
+
+def aligned(size: int, on: int) -> int:
+    if size % on != 0:
+        return size + (on - (size % on))
+    return size
