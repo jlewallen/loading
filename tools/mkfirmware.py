@@ -556,7 +556,10 @@ def main():
             fw.generate(args.name)
 
             if args.bin_path:
-                ea.write_bin(args.bin_path)
+                if args.dynamic:
+                    ea.write_bin(args.bin_path)
+                else:
+                    make_binary_from_elf(args.fkb_path, args.bin_path)
         else:
             if args.bin_path:
                 make_binary_from_elf(args.elf_path, args.bin_path)
