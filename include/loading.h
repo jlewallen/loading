@@ -94,10 +94,12 @@ uint32_t fkb_external_println(const char *str, ...);
 
 uint32_t fkb_external_vprintf(const char *str, va_list args);
 
+int32_t fkb_same_header(fkb_header_t const *a, fkb_header_t const *b);
+
 #define FKB_HEADER_SIGNATURE()   ("FKB")
 
 #ifdef __cplusplus
-}
+} // extern "C"
 #endif
 
 #endif // LDING_LOADING_H

@@ -108,6 +108,12 @@ uint32_t fkb_find_and_launch(void const *ptr) {
     return fkb_try_launch(selected);
 }
 
+int32_t fkb_same_header(fkb_header_t const *a, fkb_header_t const *b) {
+    if (a == NULL || b == NULL) return 0;
+    if (a->firmware.hash_size != b->firmware.hash_size) return 0;
+    return memcmp(a->firmware.hash, b->firmware.hash, b->firmware.hash_size) == 0;
+}
+
 static uint8_t has_valid_signature(void const *ptr) {
     fkb_header_t const *fkbh = (fkb_header_t const *)ptr;
     return strcmp(fkbh->signature, "FKB") == 0;
