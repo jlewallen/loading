@@ -15,12 +15,8 @@ extern uint32_t __cm_ram_origin;
 extern uint32_t __heap_top;
 extern uint32_t __data_start__;
 
-static uint8_t has_valid_signature(void const *ptr);
-static uint32_t aligned_on(uint32_t value, uint32_t on);
-static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t const *ptr, size_t size);
-
 fkb_header_t const *fkb_try_header(void const *ptr) {
-    if (!has_valid_signature(ptr)) {
+    if (!fkb_has_valid_signature(ptr)) {
         return NULL;
     }
 
@@ -93,12 +89,12 @@ uint32_t fkb_find_and_launch(void const *ptr) {
                              fkbh->firmware.vtor_offset);
 
         char hex_hash[(fkbh->firmware.hash_size * 2) + 1];
-        bytes_to_hex(hex_hash, sizeof(hex_hash), fkbh->firmware.hash, fkbh->firmware.hash_size);
+        fkb_bytes_to_hex(hex_hash, sizeof(hex_hash), fkbh->firmware.hash, fkbh->firmware.hash_size);
 
         fkb_external_println("bl: [0x%08p] hash='%s' timestamp=%lu", ptr,
                              hex_hash, fkbh->firmware.timestamp);
 
-        ptr += aligned_on(fkbh->firmware.binary_size, 0x1000);
+        ptr += fkb_aligned_on(fkbh->firmware.binary_size, 0x1000);
     }
 
     if (selected == NULL) {
@@ -106,30 +102,4 @@ uint32_t fkb_find_and_launch(void const *ptr) {
     }
 
     return fkb_try_launch(selected);
-}
-
-int32_t fkb_same_header(fkb_header_t const *a, fkb_header_t const *b) {
-    if (a == NULL || b == NULL) return 0;
-    if (a->firmware.hash_size != b->firmware.hash_size) return 0;
-    return memcmp(a->firmware.hash, b->firmware.hash, b->firmware.hash_size) == 0;
-}
-
-static uint8_t has_valid_signature(void const *ptr) {
-    fkb_header_t const *fkbh = (fkb_header_t const *)ptr;
-    return strcmp(fkbh->signature, "FKB") == 0;
-}
-
-static uint32_t aligned_on(uint32_t value, uint32_t on) {
-    return ((value % on != 0) ? (value + (on - (value % on))) : value);
-}
-
-static uint32_t bytes_to_hex(char *buffer, size_t buffer_length, uint8_t const *ptr, size_t size) {
-    for (size_t i = 0; i < size; ++i) {
-        buffer[i * 2    ] = "0123456789abcdef"[ptr[i] >> 4];
-        buffer[i * 2 + 1] = "0123456789abcdef"[ptr[i] & 0x0F];
-    }
-
-    buffer[size * 2] = 0;
-
-    return 0;
 }

@@ -96,6 +96,12 @@ uint32_t fkb_external_vprintf(const char *str, va_list args);
 
 int32_t fkb_same_header(fkb_header_t const *a, fkb_header_t const *b);
 
+int32_t fkb_bytes_to_hex(char *buffer, size_t buffer_length, uint8_t const *ptr, size_t size);
+
+int32_t fkb_has_valid_signature(void const *ptr);
+
+uint32_t fkb_aligned_on(uint32_t value, uint32_t on);
+
 #define FKB_HEADER_SIGNATURE()   ("FKB")
 
 #ifdef __cplusplus
