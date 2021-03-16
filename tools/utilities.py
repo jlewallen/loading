@@ -166,7 +166,7 @@ def relocation_type_name(r):
     return "<unknown>"
 
 
-def append_hash(bin_path: str):
+def append_hash(bin_path: str) -> int:
     logging.info("Calculating hash of '%s'" % (bin_path))
 
     b2 = pyblake2.blake2b(digest_size=32)
@@ -177,13 +177,19 @@ def append_hash(bin_path: str):
                 break
             b2.update(data)
 
+    size = None
+
     with open(bin_path, "ab") as f:
         f.write(b2.digest())
+        size = f.tell()
 
     with open(bin_path + ".b2sum", "w") as s:
         s.write(b2.hexdigest())
 
-    logging.info("Hash '%s'" % (b2.hexdigest(),))
+    logging.info("Hash '%s' (%d)" % (b2.hexdigest(), size))
+
+    assert size
+    return size
 
 
 def aligned(size: int, on: int) -> int:

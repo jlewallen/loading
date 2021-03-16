@@ -90,6 +90,13 @@ class ElfAnalyzer:
         except:
             return None
 
+    def by_name(self, name: str) -> Optional[lief.ELF.Section]:
+        assert self.binary
+        try:
+            return self.binary.get_section(name)
+        except:
+            return None
+
     def get_got_size(self) -> int:
         g = self.got()
         if g is None:
@@ -284,10 +291,15 @@ class ElfAnalyzer:
 
     def get_binary_sections(self):
         return [
+            self.by_name(".vectors"),
             self.fkbheader(),
             self.code(),
+            self.by_name(".ARM.exidx"),
+            self.by_name(".data.rtt"),
+            self.by_name(".data.fkb.launch"),
             self.data(),
             self.bss(),
+            self.by_name(".noinit"),
             self.got(),
             self.fkdyn(),
         ]
@@ -300,7 +312,8 @@ class ElfAnalyzer:
                     data += bytearray(section.content)
             f.write(data)
 
-        utilities.append_hash(bin_path)
+        actual_size = utilities.append_hash(bin_path)
+        assert actual_size == self.get_binary_size()
 
 
 class FkbHeader:
@@ -480,13 +493,19 @@ class FkbWriter:
         )
 
 
-def make_binary_from_elf(elf_path: str, bin_path: str):
+def make_binary_from_elf(elf_path: str, bin_path: str, expected_size: int):
     command = ["arm-none-eabi-objcopy", "-O", "binary", elf_path, bin_path]
     logging.info("Exporting '%s' to '%s'" % (elf_path, bin_path))
     logging.info(" ".join(command))
     subprocess.run(command, check=True)
 
-    utilities.append_hash(bin_path)
+    actual_size = utilities.append_hash(bin_path)
+    if actual_size != expected_size:
+        logging.error(
+            "size mismatch: actual=%d vs expected=%d (exp - actual = %d)"
+            % (actual_size, expected_size, expected_size - actual_size)
+        )
+    assert actual_size == expected_size
 
 
 def configure_logging():
@@ -559,7 +578,9 @@ def main():
                 if args.dynamic:
                     ea.write_bin(args.bin_path)
                 else:
-                    make_binary_from_elf(args.fkb_path, args.bin_path)
+                    make_binary_from_elf(
+                        args.fkb_path, args.bin_path, ea.get_binary_size()
+                    )
         else:
             if args.bin_path:
                 make_binary_from_elf(args.elf_path, args.bin_path)
