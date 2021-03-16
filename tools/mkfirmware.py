@@ -115,20 +115,33 @@ class ElfAnalyzer:
             return 0
         return s.size
 
+    def get_data_size(self) -> int:
+        size = 0
+        for section_name in [".data", ".data.rtt", ".data.fkb.header"]:
+            section = self.by_name(section_name)
+            if section:
+                size += section.size
+                logging.info(
+                    "data-size: name=%s size=%d (0x%x) total=%d"
+                    % (section.name, section.size, section.size, size)
+                )
+        return size
+
     def get_binary_size(self) -> int:
-        size = self.increase_size_by
+        size = 0
         for section in self.get_binary_sections():
             if section:
                 size += section.size
-        return size
+                logging.info(
+                    "bin-size: name=%s size=%d (0x%x) total=%d"
+                    % (section.name, section.size, section.size, size)
+                )
+        if self.increase_size_by > 0:
+            size += self.increase_size_by
+            logging.info("bin-size: adding %d total=%d" % (self.increase_size_by, size))
 
-    def get_data_size(self) -> int:
-        assert self.binary
-        size = 0
-        for section in self.binary.sections:
-            if lief.ELF.SECTION_FLAGS.WRITE in section.flags_list:
-                size += section.size
-        return size - self.get_got_size() - self.get_bss_size()
+        logging.info("bin-size: %d (0x%x)" % (size, size))
+        return size
 
     def calculate_hash(self) -> bytes:
         algo = hashlib.sha1()
@@ -159,27 +172,6 @@ class ElfAnalyzer:
         self.raw_cache[section.name] = byte_data
         logging.info("Processing %s (%d)", section.name, len(byte_data))
         return byte_data
-
-    def get_section_by_address(self, address: int):
-        assert self.binary
-        for section in self.binary.sections:
-            if section.name in [".rel.data", ".rel.text"]:
-                continue
-            if not section.name in [
-                ".text",
-                ".data",
-                ".bss",
-                ".got",
-                ".data.fkb.header",
-                ".data.fkb.launch",
-                ".data.rtt",
-            ]:
-                continue
-            ss = section.virtual_address
-            se = ss + section.size
-            if address >= ss and address < se:
-                return section
-        pass
 
     def get_relocations_in_binary(self):
         started = time.time()
@@ -296,10 +288,7 @@ class ElfAnalyzer:
             self.code(),
             self.by_name(".ARM.exidx"),
             self.by_name(".data.rtt"),
-            self.by_name(".data.fkb.launch"),
             self.data(),
-            self.bss(),
-            self.by_name(".noinit"),
             self.got(),
             self.fkdyn(),
         ]
@@ -312,8 +301,14 @@ class ElfAnalyzer:
                     data += bytearray(section.content)
             f.write(data)
 
+        expected_size = self.get_binary_size()
         actual_size = utilities.append_hash(bin_path)
-        assert actual_size == self.get_binary_size()
+        if actual_size != expected_size:
+            logging.error(
+                "Size mismatch: actual=%d vs expected=%d (actual - expected = %d)"
+                % (actual_size, expected_size, actual_size - expected_size)
+            )
+        assert actual_size == expected_size
 
 
 class FkbHeader:
@@ -433,7 +428,7 @@ class FkbWriter:
         section.content = header.to_bytes()
 
     def generate(self, name: str):
-        logging.info("Code Size: %d" % (self.ea.code().size))
+        logging.info("Code Size: %d (%x)" % (self.ea.code().size, self.ea.code().size))
         logging.info("Data Size: %d" % (self.ea.get_data_size()))
         logging.info(" BSS Size: %d" % (self.ea.get_bss_size()))
         logging.info(" GOT Size: %d" % (self.ea.get_got_size()))
@@ -502,8 +497,8 @@ def make_binary_from_elf(elf_path: str, bin_path: str, expected_size: int):
     actual_size = utilities.append_hash(bin_path)
     if actual_size != expected_size:
         logging.error(
-            "size mismatch: actual=%d vs expected=%d (exp - actual = %d)"
-            % (actual_size, expected_size, expected_size - actual_size)
+            "Size mismatch: actual=%d vs expected=%d (actual - expected = %d)"
+            % (actual_size, expected_size, actual_size - expected_size)
         )
     assert actual_size == expected_size
 
