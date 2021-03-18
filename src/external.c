@@ -3,6 +3,8 @@
 
 #include <loading.h>
 
+#if defined(__SAMD51__)
+
 uint32_t fkb_external_printf(const char *str, ...) {
     va_list args;
     va_start(args, str);
@@ -23,6 +25,31 @@ uint32_t fkb_external_println(const char *str, ...) {
 uint32_t fkb_external_vprintf(const char *str, va_list args) {
     return (uint32_t)SEGGER_RTT_vprintf(0, str, (va_list *)&args);
 }
+
+#else
+
+uint32_t fkb_external_printf(const char *str, ...) {
+    va_list args;
+    va_start(args, str);
+    uint32_t r = (uint32_t)vprintf(str, &args);
+    va_end(args);
+    return r;
+}
+
+uint32_t fkb_external_println(const char *str, ...) {
+    va_list args;
+    va_start(args, str);
+    uint32_t r = (uint32_t)vprintf(str, &args);
+    printf("\n");
+    va_end(args);
+    return r;
+}
+
+uint32_t fkb_external_vprintf(const char *str, va_list args) {
+    return (uint32_t)vprintf(str, (va_list *)&args);
+}
+
+#endif
 
 int32_t fkb_same_header(fkb_header_t const *a, fkb_header_t const *b) {
     if (a == NULL || b == NULL) return 0;
