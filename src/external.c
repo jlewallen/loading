@@ -28,6 +28,8 @@ uint32_t fkb_external_vprintf(const char *str, va_list args) {
 
 #else
 
+#include <stdio.h>
+
 uint32_t fkb_external_printf(const char *str, ...) {
     va_list args;
     va_start(args, str);
