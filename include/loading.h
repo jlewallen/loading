@@ -26,8 +26,9 @@ typedef struct fkb_firmware_t {
     uint32_t flags;
     uint32_t timestamp;
     uint32_t number;
-    uint8_t reserved[15];
+    uint8_t reserved[11];
     uint8_t safe;
+    uint32_t previous;
     uint32_t binary_size;
     uint32_t tables_offset;
     uint32_t data_size;
