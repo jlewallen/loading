@@ -286,6 +286,8 @@ class ElfAnalyzer:
             self.by_name(".vectors"),
             self.fkbheader(),
             self.code(),
+            self.by_name(".init"),
+            self.by_name(".fini"),
             self.by_name(".ARM.exidx"),
             self.by_name(".data.rtt"),
             self.data(),
