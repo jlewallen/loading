@@ -242,7 +242,7 @@ class ElfAnalyzer:
                     symbols[symbol.index] = "external"
                     logging.info("External: %s", symbol.name)
             else:
-                if symbol.type != lief.ELF.SYMBOL_TYPES.FILE:
+                if symbol.type is not None and symbol.type != lief.ELF.SYMBOL_TYPES.FILE:
                     symbols[symbol.index] = "local"
 
         logging.info(
