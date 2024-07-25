@@ -185,7 +185,7 @@ class ElfAnalyzer:
         by_section_name_index = defaultdict(list)
         for r in self.binary.relocations:
             if r.has_section:
-                by_section_name_index[r.section.name_idx].append(r)
+                pass # by_section_name_index[r.section.name_idx].append(r)
 
         logging.info("Done %f", time.time() - started)
 
@@ -195,7 +195,7 @@ class ElfAnalyzer:
 
         for s in self.binary.sections:
             if s.name not in skipping:
-                relocations += by_section_name_index[s.name_idx]
+                pass # relocations += by_section_name_index[s.name_idx]
 
         logging.info("Done %f", time.time() - started)
 
@@ -235,14 +235,14 @@ class ElfAnalyzer:
             if symbol.name in ["$t", "$d", ""]:
                 continue
 
-            if symbol.binding == lief.ELF.SYMBOL_BINDINGS.GLOBAL:
+            if symbol.binding == lief.ELF.Symbol.BINDING.GLOBAL:
                 if symbol.exported or symbol.shndx != 0:
                     symbols[symbol.index] = "exported"
                 else:
                     symbols[symbol.index] = "external"
                     logging.info("External: %s", symbol.name)
             else:
-                if symbol.type is not None and symbol.type != lief.ELF.SYMBOL_TYPES.FILE:
+                if symbol.type is not None and symbol.type != lief.ELF.Symbol.TYPE.FILE:
                     symbols[symbol.index] = "local"
 
         logging.info(
@@ -264,7 +264,7 @@ class ElfAnalyzer:
             rel_offset = 0
             fixed = None
 
-            if r.type == lief.ELF.RELOCATION_ARM.GLOB_DAT and r.has_symbol:
+            if r.type == lief.ELF.Relocation.TYPE.ARM_GLOB_DAT and r.has_symbol:
                 got_offset = r.address - got_origin
                 logging.info(
                     "Relocation: sym=%s val=%s size=0x%x addr=0x%x offset=0x%x"

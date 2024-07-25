@@ -16,25 +16,25 @@ class Symbol:
         self.name = s.name
         sbind = s["st_info"]["bind"]
         if sbind == "STB_GLOBAL":
-            self.binding = lief.ELF.SYMBOL_BINDINGS.GLOBAL
+            self.binding = lief.ELF.Symbol.BINDING.GLOBAL
         elif sbind == "STB_LOCAL":
-            self.binding = lief.ELF.SYMBOL_BINDINGS.LOCAL
+            self.binding = lief.ELF.Symbol.BINDING.LOCAL
         elif sbind == "STB_WEAK":
-            self.binding = lief.ELF.SYMBOL_BINDINGS.WEAK
+            self.binding = lief.ELF.Symbol.BINDING.WEAK
         else:
             raise Exception("Unknown bind: '%s'" % (sbind))
         stype = s["st_info"]["type"]
 
         if stype == "STT_FILE":
-            self.type = lief.ELF.SYMBOL_TYPES.FILE
+            self.type = lief.ELF.Symbol.TYPE.FILE
         elif stype == "STT_OBJECT":
-            self.type = lief.ELF.SYMBOL_TYPES.OBJECT
+            self.type = lief.ELF.Symbol.TYPE.OBJECT
         elif stype == "STT_FUNC":
-            self.type = lief.ELF.SYMBOL_TYPES.FUNC
+            self.type = lief.ELF.Symbol.TYPE.FUNC
         elif stype == "STT_NOTYPE":
             self.type = None
         elif stype == "STT_SECTION":
-            self.type = lief.ELF.SYMBOL_TYPES.SECTION
+            self.type = lief.ELF.Symbol.TYPE.SECTION
         else:
             raise Exception("Unknown stype: '%s'" % (stype))
 
