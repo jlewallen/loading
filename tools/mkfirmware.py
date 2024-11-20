@@ -16,7 +16,6 @@ import hashlib
 import platform
 import threading
 import utilities
-import pyblake2  # type: ignore
 
 from collections import defaultdict
 

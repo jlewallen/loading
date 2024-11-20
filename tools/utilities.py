@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 import logging
 import lief  # type: ignore
-import pyblake2  # type: ignore
+import hashlib
 
 from elftools.elf.elffile import ELFFile  # type: ignore
 from elftools.elf.relocation import RelocationSection  # type: ignore
@@ -169,7 +169,7 @@ def relocation_type_name(r):
 def append_hash(bin_path: str) -> int:
     logging.info("Calculating hash of '%s'" % (bin_path))
 
-    b2 = pyblake2.blake2b(digest_size=32)
+    b2 = hashlib.blake2b(digest_size=32)
     with open(bin_path, "rb") as f:
         while True:
             data = f.read(65536)
